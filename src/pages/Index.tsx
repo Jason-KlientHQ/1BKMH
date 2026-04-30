@@ -24,29 +24,47 @@ const Index = () => {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [showMap, setShowMap] = useState(false);
+  const [liveLy, setLiveLy] = useState<number | null>(null);
+  const mapRef = useRef<GalaxyMapHandle>(null);
+
+  const compute = (birthStr: string, leap: boolean): Result | null => {
+    if (!birthStr) return null;
+    const birth = new Date(birthStr);
+    const now = new Date();
+    if (birth > now) return null;
+    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
+    const daysPerYear = leap ? 365.25 : 365;
+    const secPerYear = daysPerYear * 86400;
+    const years = ageSeconds / secPerYear;
+    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
+    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
+    return { years, orbitsPerYear, totalOrbits, lightYears: years };
+  };
 
   const calculate = () => {
     if (!bday) {
       setError("Please pick your birthday first ✨");
       return;
     }
-    const birth = new Date(bday);
-    const now = new Date();
-    if (birth > now) {
+    const r = compute(bday, useLeap);
+    if (!r) {
       setError("Your birthday must be in the past 🌌");
       return;
     }
     setError("");
-    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
-    const daysPerYear = useLeap ? 365.25 : 365;
-    const secPerYear = daysPerYear * 86400;
-    const years = ageSeconds / secPerYear;
-    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
-    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
-    const lightYears = years;
-    setResult({ years, orbitsPerYear, totalOrbits, lightYears });
+    setResult(r);
     setShowMap(false);
   };
+
+  // Live ticker — updates every second once a result exists
+  useEffect(() => {
+    if (!result) return;
+    const id = setInterval(() => {
+      const r = compute(bday, useLeap);
+      if (r) setLiveLy(r.lightYears);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [result, bday, useLeap]);
 
   const reachedStars = result ? STARS.filter((s) => s.distance <= result.lightYears) : [];
   const nextStar = result
