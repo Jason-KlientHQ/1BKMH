@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html, Stars } from "@react-three/drei";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -24,6 +24,8 @@ export const STARS: StarPOI[] = [
   { name: "Procyon", distance: 11.46, pos: [5.3, 9.1, -4.8], url: wiki("Procyon"), desc: "Brightest star in Canis Minor" },
   { name: "Vega", distance: 25.05, pos: [18.4, 12.7, -8.9], url: wiki("Vega"), desc: "Fifth-brightest star in the night sky" },
   { name: "Fomalhaut", distance: 25.13, pos: [-14.2, 19.3, 7.1], url: wiki("Fomalhaut"), desc: "Bright star with a debris disk" },
+  { name: "40 Eridani", distance: 16.45, pos: [15.8, -6.3, 4.9], url: wiki("40 Eridani"), desc: "Triple star system, fictional home of Vulcan" },
+  { name: "Zeta Reticuli", distance: 39.3, pos: [39.2, -15.4, 22.1], url: wiki("Zeta Reticuli"), desc: "Binary star pair famous in UFO lore" },
 ];
 
 const Star = ({ star, reached }: { star: StarPOI; reached: boolean }) => (
