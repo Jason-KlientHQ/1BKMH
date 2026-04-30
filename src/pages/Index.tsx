@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Rocket, Telescope, Play, Download, ExternalLink, Activity } from "lucide-react";
+import { Sparkles, Rocket, Telescope, Play, Download, ExternalLink, Activity, Film } from "lucide-react";
 import { StarField } from "@/components/StarField";
 import { OrbitVisual } from "@/components/OrbitVisual";
 import { GalaxyMap, STARS, type GalaxyMapHandle } from "@/components/GalaxyMap";
@@ -225,6 +225,14 @@ const Index = () => {
                   >
                     <Play className="mr-2 h-4 w-4" />
                     Animate Light Sphere
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => mapRef.current?.flythrough()}
+                    className="bg-[hsl(330_100%_55%)] text-white hover:bg-[hsl(330_100%_48%)]"
+                  >
+                    <Film className="mr-2 h-4 w-4" />
+                    Video Flythrough
                   </Button>
                   <Button
                     size="lg"
