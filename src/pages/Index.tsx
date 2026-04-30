@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Rocket, Telescope } from "lucide-react";
+import { Sparkles, Rocket, Telescope, Play, Download, ExternalLink, Activity } from "lucide-react";
 import { StarField } from "@/components/StarField";
 import { OrbitVisual } from "@/components/OrbitVisual";
-import { GalaxyMap, STARS } from "@/components/GalaxyMap";
+import { GalaxyMap, STARS, type GalaxyMapHandle } from "@/components/GalaxyMap";
 
 const SECONDS_PER_ORBIT = 3135;
 
