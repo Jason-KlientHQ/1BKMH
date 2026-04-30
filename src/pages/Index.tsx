@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Rocket, Telescope } from "lucide-react";
+import { Sparkles, Rocket, Telescope, Play, Download, ExternalLink, Activity } from "lucide-react";
 import { StarField } from "@/components/StarField";
 import { OrbitVisual } from "@/components/OrbitVisual";
-import { GalaxyMap, STARS } from "@/components/GalaxyMap";
+import { GalaxyMap, STARS, type GalaxyMapHandle } from "@/components/GalaxyMap";
 
 const SECONDS_PER_ORBIT = 3135;
 
@@ -24,29 +24,47 @@ const Index = () => {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [showMap, setShowMap] = useState(false);
+  const [liveLy, setLiveLy] = useState<number | null>(null);
+  const mapRef = useRef<GalaxyMapHandle>(null);
+
+  const compute = (birthStr: string, leap: boolean): Result | null => {
+    if (!birthStr) return null;
+    const birth = new Date(birthStr);
+    const now = new Date();
+    if (birth > now) return null;
+    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
+    const daysPerYear = leap ? 365.25 : 365;
+    const secPerYear = daysPerYear * 86400;
+    const years = ageSeconds / secPerYear;
+    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
+    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
+    return { years, orbitsPerYear, totalOrbits, lightYears: years };
+  };
 
   const calculate = () => {
     if (!bday) {
       setError("Please pick your birthday first ✨");
       return;
     }
-    const birth = new Date(bday);
-    const now = new Date();
-    if (birth > now) {
+    const r = compute(bday, useLeap);
+    if (!r) {
       setError("Your birthday must be in the past 🌌");
       return;
     }
     setError("");
-    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
-    const daysPerYear = useLeap ? 365.25 : 365;
-    const secPerYear = daysPerYear * 86400;
-    const years = ageSeconds / secPerYear;
-    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
-    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
-    const lightYears = years;
-    setResult({ years, orbitsPerYear, totalOrbits, lightYears });
+    setResult(r);
     setShowMap(false);
   };
+
+  // Live ticker — updates every second once a result exists
+  useEffect(() => {
+    if (!result) return;
+    const id = setInterval(() => {
+      const r = compute(bday, useLeap);
+      if (r) setLiveLy(r.lightYears);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [result, bday, useLeap]);
 
   const reachedStars = result ? STARS.filter((s) => s.distance <= result.lightYears) : [];
   const nextStar = result
@@ -132,6 +150,15 @@ const Index = () => {
               light-years since you were born. 🌠
             </p>
 
+            {/* Live ticker */}
+            <div className="mt-4 flex items-center justify-center gap-2 rounded-md bg-accent/10 px-4 py-2 text-sm">
+              <Activity className="h-4 w-4 text-accent animate-pulse" />
+              <span className="text-muted-foreground">Live distance:</span>
+              <span className="font-mono font-bold text-accent">
+                {(liveLy ?? result.lightYears).toFixed(7)} ly
+              </span>
+            </div>
+
             {/* Stars reached */}
             <div className="mt-8 rounded-lg border border-border bg-background/40 p-5">
               <div className="mb-3 flex items-center gap-2">
@@ -147,19 +174,36 @@ const Index = () => {
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {reachedStars.map((s) => (
-                    <li
-                      key={s.name}
-                      className="flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm"
-                    >
-                      <span className="font-medium text-primary">{s.name}</span>
-                      <span className="text-xs text-muted-foreground">{s.distance} ly</span>
+                    <li key={s.name}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={s.desc}
+                        className="group flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm transition-colors hover:bg-primary/20"
+                      >
+                        <span className="flex items-center gap-1.5 font-medium text-primary">
+                          {s.name}
+                          <ExternalLink className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </span>
+                        <span className="text-xs text-muted-foreground">{s.distance} ly</span>
+                      </a>
                     </li>
                   ))}
                 </ul>
               )}
               {nextStar && (
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Next stop: <span className="text-foreground">{nextStar.name}</span> in{" "}
+                  Next stop:{" "}
+                  <a
+                    href={nextStar.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground underline-offset-2 hover:underline"
+                  >
+                    {nextStar.name}
+                  </a>{" "}
+                  in{" "}
                   <span className="text-accent">
                     {(nextStar.distance - result.lightYears).toFixed(2)} ly
                   </span>
@@ -167,22 +211,38 @@ const Index = () => {
               )}
             </div>
 
-            <div className="mt-6 flex justify-center">
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() => setShowMap((v) => !v)}
-              >
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" size="lg" onClick={() => setShowMap((v) => !v)}>
                 <Telescope className="mr-2 h-4 w-4" />
                 {showMap ? "Hide" : "Show"} 3D Galaxy Map
               </Button>
+              {showMap && (
+                <>
+                  <Button
+                    size="lg"
+                    onClick={() => mapRef.current?.animate()}
+                    className="bg-[hsl(28_100%_52%)] text-white hover:bg-[hsl(28_100%_46%)]"
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    Animate Light Sphere
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => mapRef.current?.exportPNG()}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export PNG
+                  </Button>
+                </>
+              )}
             </div>
 
             {showMap && (
               <div className="mt-6 animate-float-up">
-                <GalaxyMap lightYears={result.lightYears} />
+                <GalaxyMap ref={mapRef} lightYears={result.lightYears} />
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Drag to rotate · scroll to zoom · the teal sphere is how far your light has reached
+                  Drag to rotate · scroll to zoom · click star labels to learn more
                 </p>
               </div>
             )}

@@ -1,23 +1,29 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html, Stars } from "@react-three/drei";
-import { useMemo } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 
 export interface StarPOI {
   name: string;
   distance: number;
   pos: [number, number, number];
+  url: string;
+  desc: string;
 }
 
+const wiki = (n: string) =>
+  `https://en.wikipedia.org/wiki/${n.replace(/ /g, "_").replace(/'/g, "%27")}`;
+
 export const STARS: StarPOI[] = [
-  { name: "Proxima Centauri", distance: 4.25, pos: [3.8, 1.2, -0.5] },
-  { name: "Barnard's Star", distance: 5.96, pos: [-4.1, -3.5, 2.1] },
-  { name: "Wolf 359", distance: 7.86, pos: [2.5, 6.8, 1.9] },
-  { name: "Sirius", distance: 8.58, pos: [-7.2, 2.9, -3.4] },
-  { name: "Epsilon Eridani", distance: 10.52, pos: [8.1, -4.2, 3.7] },
-  { name: "61 Cygni", distance: 11.4, pos: [-9.5, -3.8, 5.2] },
-  { name: "Procyon", distance: 11.46, pos: [5.3, 9.1, -4.8] },
-  { name: "Vega", distance: 25.05, pos: [18.4, 12.7, -8.9] },
-  { name: "Fomalhaut", distance: 25.13, pos: [-14.2, 19.3, 7.1] },
+  { name: "Proxima Centauri", distance: 4.25, pos: [3.8, 1.2, -0.5], url: wiki("Proxima Centauri"), desc: "Closest known star to the Sun" },
+  { name: "Barnard's Star", distance: 5.96, pos: [-4.1, -3.5, 2.1], url: wiki("Barnard's Star"), desc: "Fast-moving red dwarf" },
+  { name: "Wolf 359", distance: 7.86, pos: [2.5, 6.8, 1.9], url: wiki("Wolf 359"), desc: "Dim red dwarf in Leo" },
+  { name: "Sirius", distance: 8.58, pos: [-7.2, 2.9, -3.4], url: wiki("Sirius"), desc: "Brightest star in Earth's night sky" },
+  { name: "Epsilon Eridani", distance: 10.52, pos: [8.1, -4.2, 3.7], url: wiki("Epsilon Eridani"), desc: "Young star with a planetary system" },
+  { name: "61 Cygni", distance: 11.4, pos: [-9.5, -3.8, 5.2], url: wiki("61 Cygni"), desc: "First star to have its parallax measured" },
+  { name: "Procyon", distance: 11.46, pos: [5.3, 9.1, -4.8], url: wiki("Procyon"), desc: "Brightest star in Canis Minor" },
+  { name: "Vega", distance: 25.05, pos: [18.4, 12.7, -8.9], url: wiki("Vega"), desc: "Fifth-brightest star in the night sky" },
+  { name: "Fomalhaut", distance: 25.13, pos: [-14.2, 19.3, 7.1], url: wiki("Fomalhaut"), desc: "Bright star with a debris disk" },
 ];
 
 const Star = ({ star, reached }: { star: StarPOI; reached: boolean }) => (
@@ -31,19 +37,87 @@ const Star = ({ star, reached }: { star: StarPOI; reached: boolean }) => (
       />
     </mesh>
     <Html distanceFactor={20} position={[0, 1, 0]} center>
-      <div
-        className="pointer-events-none whitespace-nowrap text-[10px] font-medium"
+      <a
+        href={star.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="whitespace-nowrap text-[10px] font-medium underline-offset-2 hover:underline"
         style={{ color: reached ? "#ffd166" : "#9ad7ff", textShadow: "0 0 4px #000" }}
       >
         {star.name} · {star.distance} ly
-      </div>
+      </a>
     </Html>
   </group>
 );
 
-export const GalaxyMap = ({ lightYears }: { lightYears: number }) => {
-  // Light-sphere radius capped so it stays visible in scene
+const AnimatedLightSphere = ({
+  target,
+  animating,
+  onDone,
+}: {
+  target: number;
+  animating: boolean;
+  onDone: () => void;
+}) => {
+  const ref = useRef<THREE.Mesh>(null);
+  const start = useRef<number | null>(null);
+  const DURATION = 4; // seconds
+
+  useFrame((state) => {
+    if (!ref.current) return;
+    if (animating) {
+      if (start.current === null) start.current = state.clock.getElapsedTime();
+      const t = Math.min((state.clock.getElapsedTime() - start.current!) / DURATION, 1);
+      ref.current.scale.setScalar(t * target);
+      if (t >= 1) {
+        start.current = null;
+        onDone();
+      }
+    } else {
+      ref.current.scale.setScalar(target);
+    }
+  });
+
+  if (target <= 0.1) return null;
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[1, 32, 32]} />
+      <meshBasicMaterial color="#00ffcc" transparent opacity={0.12} wireframe />
+    </mesh>
+  );
+};
+
+export interface GalaxyMapHandle {
+  exportPNG: () => void;
+  animate: () => void;
+}
+
+interface GalaxyMapProps {
+  lightYears: number;
+}
+
+export const GalaxyMap = forwardRef<GalaxyMapHandle, GalaxyMapProps>(({ lightYears }, ref) => {
   const sphereRadius = Math.min(lightYears, 30);
+  const [animating, setAnimating] = useState(false);
+  const glRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    animate: () => setAnimating(true),
+    exportPNG: () => {
+      const gl = glRef.current;
+      const scene = sceneRef.current;
+      const cam = cameraRef.current;
+      if (!gl || !scene || !cam) return;
+      gl.render(scene, cam);
+      const url = gl.domElement.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "light_journey.png";
+      a.click();
+    },
+  }));
 
   const reachedSet = useMemo(
     () => new Set(STARS.filter((s) => s.distance <= lightYears).map((s) => s.name)),
@@ -52,24 +126,29 @@ export const GalaxyMap = ({ lightYears }: { lightYears: number }) => {
 
   return (
     <div className="h-[420px] w-full overflow-hidden rounded-lg border border-border bg-black">
-      <Canvas camera={{ position: [25, 18, 30], fov: 55 }}>
+      <Canvas
+        camera={{ position: [25, 18, 30], fov: 55 }}
+        gl={{ preserveDrawingBuffer: true }}
+        onCreated={({ gl, scene, camera }) => {
+          glRef.current = gl;
+          sceneRef.current = scene;
+          cameraRef.current = camera;
+        }}
+      >
         <ambientLight intensity={0.4} />
         <pointLight position={[0, 0, 0]} intensity={3} color="#ffcc66" distance={100} />
         <Stars radius={80} depth={50} count={2000} factor={3} fade speed={1} />
 
-        {/* Sun */}
         <mesh>
           <sphereGeometry args={[1.2, 32, 32]} />
           <meshStandardMaterial color="#ffcc33" emissive="#ff9900" emissiveIntensity={2} />
         </mesh>
 
-        {/* Light sphere — how far light traveled */}
-        {sphereRadius > 0.1 && (
-          <mesh>
-            <sphereGeometry args={[sphereRadius, 32, 32]} />
-            <meshBasicMaterial color="#00ffcc" transparent opacity={0.08} wireframe />
-          </mesh>
-        )}
+        <AnimatedLightSphere
+          target={sphereRadius}
+          animating={animating}
+          onDone={() => setAnimating(false)}
+        />
 
         {STARS.map((s) => (
           <Star key={s.name} star={s} reached={reachedSet.has(s.name)} />
@@ -79,4 +158,6 @@ export const GalaxyMap = ({ lightYears }: { lightYears: number }) => {
       </Canvas>
     </div>
   );
-};
+});
+
+GalaxyMap.displayName = "GalaxyMap";
