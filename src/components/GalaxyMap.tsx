@@ -89,9 +89,36 @@ const AnimatedLightSphere = ({
   );
 };
 
+const FlythroughCamera = ({
+  active,
+  radius,
+  controlsRef,
+}: {
+  active: boolean;
+  radius: number;
+  controlsRef: React.MutableRefObject<any>;
+}) => {
+  const { camera } = useThree();
+  const angle = useRef(0);
+  useFrame((_, delta) => {
+    if (!active) return;
+    angle.current += delta * 0.4;
+    const r = Math.max(radius * 1.4, 25);
+    camera.position.set(
+      Math.cos(angle.current) * r,
+      Math.sin(angle.current * 0.5) * r * 0.4 + 10,
+      Math.sin(angle.current) * r
+    );
+    camera.lookAt(0, 0, 0);
+    if (controlsRef.current) controlsRef.current.update?.();
+  });
+  return null;
+};
+
 export interface GalaxyMapHandle {
   exportPNG: () => void;
   animate: () => void;
+  flythrough: () => void;
 }
 
 interface GalaxyMapProps {
