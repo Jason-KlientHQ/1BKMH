@@ -128,12 +128,15 @@ interface GalaxyMapProps {
 export const GalaxyMap = forwardRef<GalaxyMapHandle, GalaxyMapProps>(({ lightYears }, ref) => {
   const sphereRadius = Math.min(lightYears, 30);
   const [animating, setAnimating] = useState(false);
+  const [flying, setFlying] = useState(false);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
+  const controlsRef = useRef<any>(null);
 
   useImperativeHandle(ref, () => ({
     animate: () => setAnimating(true),
+    flythrough: () => setFlying((v) => !v),
     exportPNG: () => {
       const gl = glRef.current;
       const scene = sceneRef.current;
@@ -183,7 +186,8 @@ export const GalaxyMap = forwardRef<GalaxyMapHandle, GalaxyMapProps>(({ lightYea
           <Star key={s.name} star={s} reached={reachedSet.has(s.name)} />
         ))}
 
-        <OrbitControls enablePan={false} minDistance={5} maxDistance={120} />
+        <FlythroughCamera active={flying} radius={sphereRadius} controlsRef={controlsRef} />
+        <OrbitControls ref={controlsRef} enablePan={false} minDistance={5} maxDistance={120} enabled={!flying} />
       </Canvas>
     </div>
   );
