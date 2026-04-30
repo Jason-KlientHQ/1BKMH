@@ -88,6 +88,16 @@ const Index = () => {
                   Calculate
                 </Button>
               </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="leap"
+                  checked={useLeap}
+                  onCheckedChange={(v) => setUseLeap(v === true)}
+                />
+                <Label htmlFor="leap" className="text-sm text-muted-foreground cursor-pointer">
+                  Use leap years (365.25 days)
+                </Label>
+              </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
           </div>
@@ -96,23 +106,22 @@ const Index = () => {
         {result && (
           <Card key={result.years} className="cosmic-card p-6 sm:p-10 animate-float-up">
             <div className="grid gap-6 sm:grid-cols-3">
-              <Stat label="Your age" value={result.years.toFixed(2)} unit="years" />
+              <Stat label="Your age" value={result.years.toFixed(1)} unit="years" />
               <Stat
-                label="Light traveled"
-                value={result.lightYears.toFixed(6)}
-                unit="light years"
-                highlight
+                label="Orbits per birthday"
+                value={Math.round(result.orbitsPerYear).toLocaleString("en-US")}
+                unit="orbits/year"
               />
               <Stat
-                label="That's about"
-                value={result.km.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                unit="km"
+                label="Total orbits"
+                value={result.totalOrbits.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                unit="around the Sun"
               />
             </div>
             <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">
-              Light circling the Sun once per orbit since your birth has carried your
-              wishes <span className="text-primary font-medium">{result.lightYears.toFixed(5)}</span> light
-              years through the cosmos. 🌠
+              Light has traveled a total distance of{" "}
+              <span className="text-primary font-medium">{result.lightYears.toFixed(1)}</span>{" "}
+              light-years since you were born. 🌠
             </p>
           </Card>
         )}
