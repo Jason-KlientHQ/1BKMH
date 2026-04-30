@@ -150,6 +150,15 @@ const Index = () => {
               light-years since you were born. 🌠
             </p>
 
+            {/* Live ticker */}
+            <div className="mt-4 flex items-center justify-center gap-2 rounded-md bg-accent/10 px-4 py-2 text-sm">
+              <Activity className="h-4 w-4 text-accent animate-pulse" />
+              <span className="text-muted-foreground">Live distance:</span>
+              <span className="font-mono font-bold text-accent">
+                {(liveLy ?? result.lightYears).toFixed(7)} ly
+              </span>
+            </div>
+
             {/* Stars reached */}
             <div className="mt-8 rounded-lg border border-border bg-background/40 p-5">
               <div className="mb-3 flex items-center gap-2">
@@ -165,19 +174,36 @@ const Index = () => {
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {reachedStars.map((s) => (
-                    <li
-                      key={s.name}
-                      className="flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm"
-                    >
-                      <span className="font-medium text-primary">{s.name}</span>
-                      <span className="text-xs text-muted-foreground">{s.distance} ly</span>
+                    <li key={s.name}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={s.desc}
+                        className="group flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm transition-colors hover:bg-primary/20"
+                      >
+                        <span className="flex items-center gap-1.5 font-medium text-primary">
+                          {s.name}
+                          <ExternalLink className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </span>
+                        <span className="text-xs text-muted-foreground">{s.distance} ly</span>
+                      </a>
                     </li>
                   ))}
                 </ul>
               )}
               {nextStar && (
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Next stop: <span className="text-foreground">{nextStar.name}</span> in{" "}
+                  Next stop:{" "}
+                  <a
+                    href={nextStar.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground underline-offset-2 hover:underline"
+                  >
+                    {nextStar.name}
+                  </a>{" "}
+                  in{" "}
                   <span className="text-accent">
                     {(nextStar.distance - result.lightYears).toFixed(2)} ly
                   </span>
@@ -185,22 +211,38 @@ const Index = () => {
               )}
             </div>
 
-            <div className="mt-6 flex justify-center">
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() => setShowMap((v) => !v)}
-              >
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" size="lg" onClick={() => setShowMap((v) => !v)}>
                 <Telescope className="mr-2 h-4 w-4" />
                 {showMap ? "Hide" : "Show"} 3D Galaxy Map
               </Button>
+              {showMap && (
+                <>
+                  <Button
+                    size="lg"
+                    onClick={() => mapRef.current?.animate()}
+                    className="bg-[hsl(28_100%_52%)] text-white hover:bg-[hsl(28_100%_46%)]"
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    Animate Light Sphere
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => mapRef.current?.exportPNG()}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export PNG
+                  </Button>
+                </>
+              )}
             </div>
 
             {showMap && (
               <div className="mt-6 animate-float-up">
-                <GalaxyMap lightYears={result.lightYears} />
+                <GalaxyMap ref={mapRef} lightYears={result.lightYears} />
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Drag to rotate · scroll to zoom · the teal sphere is how far your light has reached
+                  Drag to rotate · scroll to zoom · click star labels to learn more
                 </p>
               </div>
             )}
