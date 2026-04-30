@@ -3,20 +3,23 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Sparkles } from "lucide-react";
 import { StarField } from "@/components/StarField";
 import { OrbitVisual } from "@/components/OrbitVisual";
 
-const LY_PER_YEAR = 0.00009935;
+const SECONDS_PER_ORBIT = 3135;
 
 interface Result {
   years: number;
+  orbitsPerYear: number;
+  totalOrbits: number;
   lightYears: number;
-  km: number;
 }
 
 const Index = () => {
   const [bday, setBday] = useState("");
+  const [useLeap, setUseLeap] = useState(true);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
 
@@ -32,11 +35,14 @@ const Index = () => {
       return;
     }
     setError("");
-    const ageMs = now.getTime() - birth.getTime();
-    const years = ageMs / (365.25 * 24 * 60 * 60 * 1000);
-    const lightYears = years * LY_PER_YEAR;
-    const km = lightYears * 9.461e12;
-    setResult({ years, lightYears, km });
+    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
+    const daysPerYear = useLeap ? 365.25 : 365;
+    const secPerYear = daysPerYear * 86400;
+    const years = ageSeconds / secPerYear;
+    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
+    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
+    const lightYears = years;
+    setResult({ years, orbitsPerYear, totalOrbits, lightYears });
   };
 
   return (
@@ -82,6 +88,16 @@ const Index = () => {
                   Calculate
                 </Button>
               </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="leap"
+                  checked={useLeap}
+                  onCheckedChange={(v) => setUseLeap(v === true)}
+                />
+                <Label htmlFor="leap" className="text-sm text-muted-foreground cursor-pointer">
+                  Use leap years (365.25 days)
+                </Label>
+              </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
           </div>
@@ -90,23 +106,22 @@ const Index = () => {
         {result && (
           <Card key={result.years} className="cosmic-card p-6 sm:p-10 animate-float-up">
             <div className="grid gap-6 sm:grid-cols-3">
-              <Stat label="Your age" value={result.years.toFixed(2)} unit="years" />
+              <Stat label="Your age" value={result.years.toFixed(1)} unit="years" />
               <Stat
-                label="Light traveled"
-                value={result.lightYears.toFixed(6)}
-                unit="light years"
-                highlight
+                label="Orbits per birthday"
+                value={Math.round(result.orbitsPerYear).toLocaleString("en-US")}
+                unit="orbits/year"
               />
               <Stat
-                label="That's about"
-                value={result.km.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                unit="km"
+                label="Total orbits"
+                value={result.totalOrbits.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                unit="around the Sun"
               />
             </div>
             <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">
-              Light circling the Sun once per orbit since your birth has carried your
-              wishes <span className="text-primary font-medium">{result.lightYears.toFixed(5)}</span> light
-              years through the cosmos. 🌠
+              Light has traveled a total distance of{" "}
+              <span className="text-primary font-medium">{result.lightYears.toFixed(1)}</span>{" "}
+              light-years since you were born. 🌠
             </p>
           </Card>
         )}
