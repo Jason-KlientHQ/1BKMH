@@ -2,103 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ============================================================
+   Birthday Light Journey — design system
+   Vibe: Ethereal Glass / deep-space OLED.
+   One meaning-bearing palette: gold (the Sun) + cyan (the light beam).
+   All colors HSL. shadcn token names preserved.
+   ============================================================ */
 
 @layer base {
   :root {
-    --background: 230 45% 4%;
-    --foreground: 50 100% 92%;
+    /* Deep space, faintly blue. Not pure black. */
+    --background: 234 44% 4%;
+    --foreground: 40 30% 93%;
 
-    --card: 230 40% 7%;
-    --card-foreground: 50 100% 92%;
+    --card: 232 38% 8%;
+    --card-foreground: 40 30% 93%;
 
-    --popover: 230 40% 7%;
-    --popover-foreground: 50 100% 92%;
+    --popover: 232 40% 7%;
+    --popover-foreground: 40 30% 93%;
 
-    --primary: 45 100% 60%;
-    --primary-foreground: 230 50% 5%;
+    /* The Sun — the single hero accent. */
+    --primary: 42 96% 62%;
+    --primary-foreground: 234 50% 5%;
 
-    --secondary: 260 60% 50%;
-    --secondary-foreground: 50 100% 95%;
+    /* The light beam — cyan, ties to the 3D wireframe sphere (#00ffcc). */
+    --beam: 168 84% 56%;
+    --beam-foreground: 234 50% 5%;
 
-    --muted: 230 30% 14%;
-    --muted-foreground: 230 20% 70%;
+    /* Secondary/accent kept deliberately quiet — cool desaturated slate. */
+    --secondary: 230 24% 16%;
+    --secondary-foreground: 40 30% 93%;
 
-    --accent: 280 90% 65%;
-    --accent-foreground: 230 50% 5%;
+    --muted: 230 26% 12%;
+    --muted-foreground: 228 14% 62%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --accent: 42 96% 62%;
+    --accent-foreground: 234 50% 5%;
 
-    --border: 230 40% 18%;
-    --input: 230 40% 14%;
-    --ring: 45 100% 60%;
+    --destructive: 4 70% 58%;
+    --destructive-foreground: 40 30% 96%;
 
-    --radius: 0.75rem;
+    /* Hairlines, not solid gray borders. */
+    --border: 228 30% 18%;
+    --input: 228 28% 14%;
+    --ring: 42 96% 62%;
 
-    --sun: 45 100% 60%;
-    --sun-glow: 30 100% 55%;
-    --earth: 210 90% 55%;
-    --space-deep: 250 60% 8%;
-    --star: 60 100% 90%;
+    --radius: 1rem;
 
-    --gradient-cosmos: radial-gradient(ellipse at top, hsl(260 60% 15%) 0%, hsl(230 50% 5%) 50%, hsl(0 0% 0%) 100%);
-    --gradient-sun: radial-gradient(circle, hsl(var(--sun)) 0%, hsl(var(--sun-glow)) 60%, transparent 80%);
-    --gradient-text: linear-gradient(135deg, hsl(45 100% 70%), hsl(280 90% 70%));
+    /* Domain tokens (used by 2D visuals). */
+    --sun: 42 96% 62%;
+    --sun-glow: 32 100% 56%;
+    --earth: 205 80% 56%;
+    --star: 48 100% 92%;
 
-    --shadow-glow: 0 0 60px hsl(var(--sun) / 0.5), 0 0 120px hsl(var(--sun-glow) / 0.3);
-    --shadow-card: 0 20px 60px -10px hsl(260 80% 30% / 0.4);
+    /* Layered cosmos: gold glow top, faint cool depth, OLED base. */
+    --gradient-cosmos:
+      radial-gradient(120% 80% at 50% -10%, hsl(42 90% 30% / 0.18) 0%, transparent 55%),
+      radial-gradient(90% 70% at 85% 110%, hsl(190 70% 30% / 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at top, hsl(232 50% 8%) 0%, hsl(234 50% 4%) 55%, hsl(234 60% 2%) 100%);
+    --gradient-sun: radial-gradient(circle, hsl(var(--sun)) 0%, hsl(var(--sun-glow)) 58%, transparent 80%);
+    /* Refined aurora: gold to warm-white. Not the gold→magenta AI cliche. */
+    --gradient-text: linear-gradient(112deg, hsl(46 100% 78%) 0%, hsl(40 60% 96%) 48%, hsl(168 70% 72%) 100%);
 
-    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Tinted glow + shadows — carry the scene hue, never pure black. */
+    --shadow-glow: 0 0 50px hsl(var(--sun) / 0.45), 0 0 120px hsl(var(--sun-glow) / 0.25);
+    --shadow-card: 0 24px 70px -24px hsl(234 70% 2% / 0.9), 0 8px 24px -12px hsl(234 60% 4% / 0.6);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
+    /* Motion — real-world mass. */
+    --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 232 38% 8%;
+    --sidebar-foreground: 40 30% 93%;
+    --sidebar-primary: 42 96% 62%;
+    --sidebar-primary-foreground: 234 50% 5%;
+    --sidebar-accent: 230 24% 16%;
+    --sidebar-accent-foreground: 40 30% 93%;
+    --sidebar-border: 228 30% 18%;
+    --sidebar-ring: 42 96% 62%;
   }
 }
 
@@ -107,15 +88,40 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+    background-color: hsl(234 60% 2%);
+    min-height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
     background: var(--gradient-cosmos);
-    min-height: 100vh;
+    background-attachment: fixed;
+    background-color: hsl(234 44% 4%);
+    min-height: 100dvh;
     overflow-x: hidden;
+    font-feature-settings: "ss01", "cv01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular, lined figures for all data numerals. */
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum", "lnum";
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.28);
+    color: hsl(40 40% 97%);
   }
 }
 
 @layer utilities {
+  .font-display { font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; }
+  .font-mono-num { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
   .text-gradient {
     background: var(--gradient-text);
     -webkit-background-clip: text;
@@ -123,31 +129,117 @@ All colors MUST be HSL.
     color: transparent;
   }
 
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
   .sun-glow {
     background: var(--gradient-sun);
     box-shadow: var(--shadow-glow);
   }
 
-  .cosmic-card {
-    background: hsl(var(--card) / 0.6);
-    backdrop-filter: blur(20px);
-    border: 1px solid hsl(var(--border));
+  /* Double-bezel: glass plate seated in a machined tray.
+     Use as the OUTER shell; pair with .glass-core inside. */
+  .glass-shell {
+    background: hsl(0 0% 100% / 0.025);
+    border: 1px solid hsl(0 0% 100% / 0.08);
+    border-radius: calc(var(--radius) + 0.5rem);
     box-shadow: var(--shadow-card);
+    padding: 0.4rem;
+  }
+
+  .glass-core {
+    position: relative;
+    background:
+      linear-gradient(180deg, hsl(232 40% 10% / 0.72), hsl(234 44% 6% / 0.78));
+    backdrop-filter: blur(24px) saturate(1.2);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    border: 1px solid hsl(0 0% 100% / 0.06);
+    border-radius: var(--radius);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.08),
+      inset 0 -1px 24px 0 hsl(234 60% 2% / 0.5);
+  }
+
+  /* Single-layer glass for smaller chips. */
+  .glass {
+    background: hsl(232 40% 10% / 0.55);
+    backdrop-filter: blur(16px) saturate(1.15);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    border: 1px solid hsl(0 0% 100% / 0.07);
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.06);
+  }
+
+  /* Back-compat alias for any leftover references. */
+  .cosmic-card {
+    background: hsl(232 40% 10% / 0.55);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(0 0% 100% / 0.07);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Fixed grain overlay — breaks digital flatness. pointer-events-none. */
+  .grain-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Solar-system billboard labels */
+  .ss-label { pointer-events: none; user-select: none; }
+  .ss-name {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+    color: hsl(40 30% 92%);
+    text-shadow: 0 1px 6px hsl(234 60% 2% / 0.95), 0 0 2px hsl(234 60% 2%);
+    white-space: nowrap;
+  }
+  .ss-sun { color: hsl(42 96% 66%); }
+  .ss-dwarf { color: hsl(228 18% 70%); font-weight: 500; font-size: 12px; }
+  .ss-moon { color: hsl(200 30% 82%); font-weight: 500; font-size: 11px; }
+  .ss-helio { color: hsl(190 70% 70%); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
+
+  /* Scroll-reveal: heavy fade-up with blur. JS toggles .is-visible. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(2.5rem);
+    filter: blur(8px);
+    transition:
+      opacity 0.9s var(--ease-fluid),
+      transform 0.9s var(--ease-fluid),
+      filter 0.9s var(--ease-fluid);
+    will-change: transform, opacity;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; filter: none; transition: none; }
+    html { scroll-behavior: auto; }
   }
 }
 
+/* ---- keyframes ---- */
 @keyframes orbit {
   from { transform: rotate(0deg) translateX(140px) rotate(0deg); }
   to { transform: rotate(360deg) translateX(140px) rotate(-360deg); }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 60px hsl(var(--sun) / 0.5), 0 0 120px hsl(var(--sun-glow) / 0.3); }
-  50% { box-shadow: 0 0 80px hsl(var(--sun) / 0.7), 0 0 160px hsl(var(--sun-glow) / 0.5); }
+  0%, 100% { box-shadow: 0 0 50px hsl(var(--sun) / 0.45), 0 0 110px hsl(var(--sun-glow) / 0.28); }
+  50% { box-shadow: 0 0 74px hsl(var(--sun) / 0.66), 0 0 150px hsl(var(--sun-glow) / 0.46); }
 }
 
 @keyframes twinkle {
-  0%, 100% { opacity: 0.3; }
+  0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
 }
 
@@ -156,7 +248,18 @@ All colors MUST be HSL.
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes aurora-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.9; }
+  50% { transform: translate3d(2%, -1.5%, 0) scale(1.06); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+
 .animate-orbit { animation: orbit 8s linear infinite; }
-.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 3.4s ease-in-out infinite; }
 .animate-twinkle { animation: twinkle 3s ease-in-out infinite; }
-.animate-float-up { animation: float-up 0.6s ease-out forwards; }
+.animate-float-up { animation: float-up 0.7s var(--ease-fluid) forwards; }
+.animate-aurora { animation: aurora-drift 14s ease-in-out infinite; }

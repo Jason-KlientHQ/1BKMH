@@ -13,12 +13,25 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Sora", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+      },
+      transitionTimingFunction: {
+        fluid: "cubic-bezier(0.32, 0.72, 0, 1)",
+        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        beam: {
+          DEFAULT: "hsl(var(--beam))",
+          foreground: "hsl(var(--beam-foreground))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

@@ -1,0 +1,1656 @@
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls, Html, Line, Stars } from "@react-three/drei";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import * as THREE from "three";
+import { X, Maximize2, Minimize2, Radio, Compass } from "lucide-react";
+import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
+import { eventForYear } from "@/data/worldEvents";
+import {
+  heliocentricAU,
+  toScenePosition,
+  scaleRadiusKm,
+  scaleDistanceAU,
+  orbitPath,
+} from "@/lib/orbital";
+import {
+  PLANETS,
+  MOONS,
+  ASTEROID_BELT,
+  KUIPER_BELT,
+  HELIOSPHERE,
+  OORT_CLOUD,
+  NEARBY_STARS,
+  COMETS,
+  BLACK_HOLES,
+  EXOPLANETS,
+  ROADSTER,
+  SPACECRAFT,
+  EXOTIC_OBJECTS,
+  AU_PER_LY,
+  type Body,
+  type Moon,
+  type StarPOI,
+  type Comet,
+  type Exoplanet,
+  type Spacecraft,
+  type ExoticObject,
+} from "@/data/solarSystem";
+import { STAR_CATALOG } from "@/data/starCatalog";
+
+interface SimClock {
+  years: number;
+  speed: number;
+  paused: boolean;
+  camDist: number;
+}
+
+const BASE_YEARS_PER_SEC = 0.08; // calmer default (Earth ~12.5s/orbit at 1×)
+const EPOCH_OFFSET = 26.5;
+const CAMERA_FOV = 55;
+const HALF_FOV = (CAMERA_FOV * Math.PI) / 180 / 2;
+const MAX_ZOOM = 30_000; // covers the largest light sphere + the nearest stars
+
+// Distance needed to FIT a sphere of the given scene radius fully in view.
+const frameDistanceFor = (reach: number) =>
+  Math.min((reach / Math.sin(HALF_FOV)) * 1.15, MAX_ZOOM * 0.95);
+
+// Exaggerated render radius for a star. Cube-root compression so giants
+// (Arcturus 25 R☉, Betelgeuse ~270 R☉) read as gigantic without dwarfing the scene.
+const starRenderSize = (s: StarPOI) => 10 + 7 * Math.cbrt(s.radiusSolar);
+const catalogSize = (r: number) => 7 + 7 * Math.cbrt(Math.max(r, 0.05));
+
+// Live scene position of any focusable body (Sun / planet / star), so the
+// camera can fly to it and keep tracking it as it orbits.
+const starScenePos = (s: StarPOI): THREE.Vector3 =>
+  new THREE.Vector3(...s.dir).normalize().multiplyScalar(scaleDistanceAU(s.distance * AU_PER_LY));
+
+const bodyScenePos = (name: string, years: number): THREE.Vector3 => {
+  if (name === "__light__" || name === "Sun") return new THREE.Vector3(0, 0, 0);
+  const p = PLANETS.find((b) => b.name === name);
+  if (p) {
+    const [x, y, z] = toScenePosition(heliocentricAU(p, years));
+    return new THREE.Vector3(x, y, z);
+  }
+  const c = COMETS.find((b) => b.name === name);
+  if (c) {
+    const [x, y, z] = toScenePosition(heliocentricAU(c, years));
+    return new THREE.Vector3(x, y, z);
+  }
+  if (name === ROADSTER.name) {
+    const [x, y, z] = toScenePosition(heliocentricAU(ROADSTER, years));
+    return new THREE.Vector3(x, y, z);
+  }
+  const s = NEARBY_STARS.find((b) => b.name === name);
+  if (s) return starScenePos(s);
+  const bh = BLACK_HOLES.find((b) => b.name === name);
+  if (bh) return new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY));
+  const e = EXOPLANETS.find((b) => b.name === name);
+  if (e) {
+    const host = NEARBY_STARS.find((b) => b.name === e.host);
+    if (host) return starScenePos(host);
+  }
+  const cat = STAR_CATALOG.find((b) => b.name === name);
+  if (cat) return new THREE.Vector3(...cat.pos).normalize().multiplyScalar(scaleDistanceAU(cat.ly * AU_PER_LY));
+  const sc = SPACECRAFT.find((b) => b.name === name);
+  if (sc) {
+    if (sc.orbit === "earth") {
+      const earth = PLANETS.find((b) => b.name === "Earth")!;
+      const [x, y, z] = toScenePosition(heliocentricAU(earth, years));
+      return new THREE.Vector3(x, y, z);
+    }
+    return new THREE.Vector3(...(sc.dir ?? [1, 0, 0])).normalize().multiplyScalar(scaleDistanceAU(sc.distanceAU ?? 1));
+  }
+  const ex = EXOTIC_OBJECTS.find((b) => b.name === name);
+  if (ex) return new THREE.Vector3(...ex.dir).normalize().multiplyScalar(scaleDistanceAU(ex.sceneDistance * AU_PER_LY));
+  return new THREE.Vector3(0, 0, 0);
+};
+
+// How far back to sit when focusing a body — sized to its render radius.
+const bodyFrameDist = (name: string, reach: number): number => {
+  if (name === "__light__") return frameDistanceFor(reach > 0 ? scaleDistanceAU(reach * AU_PER_LY) : 200);
+  if (name === "Sun") return 80;
+  const p = PLANETS.find((b) => b.name === name);
+  if (p) return Math.max(scaleRadiusKm(p.radiusKm) * 7, 6);
+  if (COMETS.some((b) => b.name === name)) return 7;
+  if (name === ROADSTER.name) return 6;
+  const s = NEARBY_STARS.find((b) => b.name === name);
+  if (s) return Math.max(starRenderSize(s) * 3.5, 40);
+  if (BLACK_HOLES.some((b) => b.name === name)) return 120;
+  const catStar = STAR_CATALOG.find((b) => b.name === name);
+  if (catStar) return Math.max(catalogSize(catStar.r) * 3.2, 40);
+  if (SPACECRAFT.some((b) => b.name === name)) return 6;
+  if (EXOTIC_OBJECTS.some((b) => b.name === name)) return 90;
+  return 80;
+};
+
+const tmp = new THREE.Vector3();
+const UP_Z = new THREE.Vector3(0, 0, 1);
+
+/* ------------------- animated star-surface plasma shader ------------------ */
+const STAR_VERT = `
+  varying vec3 vPos;
+  void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`;
+const STAR_FRAG = `
+  uniform float uTime; uniform vec3 uColor; varying vec3 vPos;
+  float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+  float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
+    return mix(mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x), mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+               mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x), mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y), f.z); }
+  float fbm(vec3 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.02; a*=0.5; } return v; }
+  void main(){
+    vec3 p = normalize(vPos);
+    float n = fbm(p*4.0 + vec3(0.0, uTime*0.12, uTime*0.05));
+    float n2 = fbm(p*9.0 - vec3(uTime*0.08));
+    float t = clamp(n*0.75 + n2*0.5, 0.0, 1.0);
+    vec3 hot = uColor*1.7 + vec3(0.12);
+    vec3 cool = uColor*0.45;
+    vec3 col = mix(cool, hot, t) * (0.8 + 0.35*n2);
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+const StarSurface = ({
+  color,
+  size,
+  segments = 40,
+  onClick,
+  onPointerOver,
+  onPointerOut,
+}: {
+  color: string;
+  size: number;
+  segments?: number;
+  onClick?: (e: any) => void;
+  onPointerOver?: (e: any) => void;
+  onPointerOut?: () => void;
+}) => {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(
+    () => ({ uTime: { value: 0 }, uColor: { value: new THREE.Color(color) } }),
+    [color]
+  );
+  useFrame((_, dt) => {
+    if (matRef.current) matRef.current.uniforms.uTime.value += dt;
+  });
+  return (
+    <mesh onClick={onClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <sphereGeometry args={[size, segments, segments]} />
+      <shaderMaterial ref={matRef} vertexShader={STAR_VERT} fragmentShader={STAR_FRAG} uniforms={uniforms} toneMapped={false} />
+    </mesh>
+  );
+};
+
+// Lighter scene on phones (fewer decorative particles, lower pixel ratio).
+const IS_MOBILE = typeof window !== "undefined" && window.matchMedia?.("(max-width: 768px)").matches;
+const REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// Jump destinations for the Explore menu (far things you can't easily click).
+const EXPLORE_GROUPS: { label: string; items: string[] }[] = [
+  { label: "Spacecraft", items: [ROADSTER.name, ...SPACECRAFT.map((s) => s.name)] },
+  { label: "Comets", items: COMETS.map((c) => c.name) },
+  { label: "Bright stars", items: ["Sirius", "Vega", "Arcturus", "Aldebaran", "Betelgeuse", "Antares"] },
+  { label: "Exotic objects", items: EXOTIC_OBJECTS.map((o) => o.name) },
+  { label: "Black holes", items: BLACK_HOLES.map((b) => b.name) },
+];
+
+/* --------------------------- the time integrator -------------------------- */
+const TimeKeeper = ({
+  clock,
+  onZoom,
+}: {
+  clock: React.MutableRefObject<SimClock>;
+  onZoom: (near: boolean) => void;
+}) => {
+  const { camera, controls } = useThree() as { camera: THREE.PerspectiveCamera; controls: any };
+  const nearRef = useRef(false);
+  useFrame((_, delta) => {
+    const c = clock.current;
+    if (!c.paused) c.years += delta * BASE_YEARS_PER_SEC * c.speed;
+    const target = controls?.target ?? tmp.set(0, 0, 0);
+    const d = camera.position.distanceTo(target as THREE.Vector3);
+    c.camDist = d;
+
+    // Dynamic near/far scaled to the current zoom — good depth precision from
+    // a moon to the nearest stars WITHOUT logarithmicDepthBuffer (which makes
+    // geometry vanish on some Mac/ANGLE GPUs).
+    if (camera.isPerspectiveCamera) {
+      const near = Math.max(d * 0.0008, 0.01);
+      const far = d * 20 + 20_000;
+      if (Math.abs(camera.near - near) / near > 0.05 || Math.abs(camera.far - far) / far > 0.05) {
+        camera.near = near;
+        camera.far = far;
+        camera.updateProjectionMatrix();
+      }
+    }
+
+    const near = d < 34;
+    if (near !== nearRef.current) {
+      nearRef.current = near;
+      onZoom(near);
+    }
+  });
+  return null;
+};
+
+/* --------------------------------- the Sun -------------------------------- */
+const Sun = ({ onFocus }: { onFocus: (name: string) => void }) => {
+  const r = scaleRadiusKm(696000);
+  return (
+    <group>
+      <StarSurface
+        color="#ffb43a"
+        size={r}
+        segments={64}
+        onClick={(e) => { e.stopPropagation(); onFocus("Sun"); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+        onPointerOut={() => { document.body.style.cursor = "auto"; }}
+      />
+      <mesh>
+        <sphereGeometry args={[r * 1.5, 32, 32]} />
+        <meshBasicMaterial color="#ff9b21" transparent opacity={0.18} />
+      </mesh>
+      <pointLight position={[0, 0, 0]} intensity={3.2} distance={0} decay={0} color="#fff2cc" />
+      <Html position={[0, r + 1.5, 0]} center distanceFactor={60} className="ss-label">
+        <button
+          onClick={() => onFocus("Sun")}
+          className="ss-name ss-sun"
+          style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+        >
+          Sun
+        </button>
+      </Html>
+    </group>
+  );
+};
+
+/* -------------------------------- a Planet -------------------------------- */
+const Planet = ({
+  body,
+  clock,
+  showMinor,
+  onFocus,
+}: {
+  body: Body;
+  clock: React.MutableRefObject<SimClock>;
+  showMinor: boolean;
+  onFocus: (name: string) => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const dropRef = useRef<THREE.Mesh>(null);
+  const path = useMemo(() => orbitPath(body), [body]);
+  const r = scaleRadiusKm(body.radiusKm);
+  const isDwarf = body.kind === "dwarf";
+
+  useFrame(() => {
+    if (!ref.current) return;
+    const au = heliocentricAU(body, clock.current.years);
+    const [x, y, z] = toScenePosition(au);
+    ref.current.position.set(x, y, z);
+    ref.current.rotation.y += 0.01;
+    if (dropRef.current) dropRef.current.position.set(x, 0, z);
+  });
+
+  const showLabel = !isDwarf || showMinor;
+
+  return (
+    <group>
+      <Line points={path} color={isDwarf ? "#4a5170" : "#39507f"} lineWidth={1} transparent opacity={isDwarf ? 0.25 : 0.4} />
+      <mesh ref={dropRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[r * 0.4, r * 0.4 + 0.06, 20]} />
+        <meshBasicMaterial color={body.color} transparent opacity={0.3} side={THREE.DoubleSide} />
+      </mesh>
+
+      <group ref={ref}>
+        <mesh
+          onClick={(e) => {
+            e.stopPropagation();
+            onFocus(body.name);
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = "auto";
+          }}
+        >
+          <sphereGeometry args={[r, 32, 32]} />
+          <meshStandardMaterial
+            color={body.color}
+            emissive={body.emissive ?? "#000000"}
+            emissiveIntensity={body.emissive ? 0.5 : 0}
+            roughness={0.85}
+            metalness={0.05}
+          />
+        </mesh>
+
+        {body.ring && (
+          <mesh rotation={[-Math.PI / 2 + 0.46, 0, 0]}>
+            <ringGeometry args={[scaleRadiusKm(body.ring.inner), scaleRadiusKm(body.ring.outer), 64]} />
+            <meshBasicMaterial color={body.ring.color} transparent opacity={0.55} side={THREE.DoubleSide} />
+          </mesh>
+        )}
+
+        {showLabel && (
+          <Html position={[0, r + 0.7, 0]} center distanceFactor={50} className="ss-label">
+            <button
+              onClick={() => onFocus(body.name)}
+              className={`ss-name ${isDwarf ? "ss-dwarf" : ""}`}
+              style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+              title={`Fly to ${body.name}`}
+            >
+              {body.name}
+            </button>
+          </Html>
+        )}
+      </group>
+    </group>
+  );
+};
+
+/* --------------------------------- a Moon --------------------------------- */
+const moonSceneRadius = (parent: Body, m: Moon) =>
+  scaleRadiusKm(parent.radiusKm) + 0.5 + 0.85 * Math.log10(1 + m.aKm / 50000);
+
+const MoonBody = ({
+  moon,
+  parent,
+  clock,
+  show,
+  onFocus,
+}: {
+  moon: Moon;
+  parent: Body;
+  clock: React.MutableRefObject<SimClock>;
+  show: boolean;
+  onFocus: (name: string) => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const localR = moonSceneRadius(parent, moon);
+  const r = Math.max(0.08, scaleRadiusKm(moon.radiusKm) * 0.8);
+  const incl = (moon.inclDeg * Math.PI) / 180;
+
+  // Calm, compressed cadence: real relative periods make the fastest moons blur.
+  // Map each moon's period into a gentle 12–52 s/orbit range (at 1× speed),
+  // preserving order & retrograde direction. Wonder over precision.
+  const { rate } = useMemo(() => {
+    const absDays = Math.abs(moon.periodDays);
+    const dir = moon.periodDays < 0 ? -1 : 1;
+    const norm = Math.min(Math.max((Math.log(absDays) - Math.log(1.3)) / (Math.log(80) - Math.log(1.3)), 0), 1);
+    const displaySec = 12 + norm * 40;
+    return { rate: ((2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec)) * dir };
+  }, [moon.periodDays]);
+
+  useFrame(() => {
+    if (!ref.current || !show) return;
+    const au = heliocentricAU(parent, clock.current.years);
+    const [px, py, pz] = toScenePosition(au);
+    const ang = clock.current.years * rate;
+    const lx = Math.cos(ang) * localR;
+    const lz = Math.sin(ang) * localR * Math.cos(incl);
+    const ly = Math.sin(ang) * localR * Math.sin(incl);
+    ref.current.position.set(px + lx, py + ly, pz + lz);
+  });
+
+  if (!show) return null;
+  return (
+    <group ref={ref}>
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          onFocus(moon.name);
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = "auto";
+        }}
+      >
+        <sphereGeometry args={[r, 28, 28]} />
+        <meshStandardMaterial color={moon.color} roughness={0.9} />
+      </mesh>
+      <Html position={[0, r + 0.35, 0]} center distanceFactor={26} className="ss-label">
+        <button
+          onClick={() => onFocus(moon.name)}
+          className="ss-name ss-moon"
+          style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+        >
+          {moon.name}
+        </button>
+      </Html>
+    </group>
+  );
+};
+
+/* --------------------------------- a Comet -------------------------------- */
+const CometBody = ({
+  comet,
+  clock,
+  onFocus,
+}: {
+  comet: Comet;
+  clock: React.MutableRefObject<SimClock>;
+  onFocus: (name: string) => void;
+}) => {
+  const nucleusRef = useRef<THREE.Group>(null);
+  const tailRef = useRef<THREE.Group>(null);
+  const path = useMemo(() => orbitPath(comet), [comet]);
+  const posV = useMemo(() => new THREE.Vector3(), []);
+  const dirV = useMemo(() => new THREE.Vector3(), []);
+  const r = Math.max(0.4, scaleRadiusKm(comet.radiusKm));
+  const tailLen = 12;
+
+  useFrame(() => {
+    const au = heliocentricAU(comet, clock.current.years);
+    const [x, y, z] = toScenePosition(au);
+    posV.set(x, y, z);
+    nucleusRef.current?.position.copy(posV);
+    if (tailRef.current) {
+      tailRef.current.position.copy(posV);
+      dirV.copy(posV).normalize(); // tail streams away from the Sun (origin)
+      tailRef.current.quaternion.setFromUnitVectors(UP_Z, dirV);
+    }
+  });
+
+  return (
+    <group>
+      <Line points={path} color="#7fd8ff" lineWidth={1} transparent opacity={0.28} dashed dashSize={1.2} gapSize={1.2} />
+      <group ref={nucleusRef}>
+        <mesh
+          onClick={(e) => { e.stopPropagation(); onFocus(comet.name); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+          onPointerOut={() => { document.body.style.cursor = "auto"; }}
+        >
+          <sphereGeometry args={[r, 24, 24]} />
+          <meshBasicMaterial color={comet.color} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[r * 2.4, 20, 20]} />
+          <meshBasicMaterial color={comet.color} transparent opacity={0.22} depthWrite={false} />
+        </mesh>
+        <Html position={[0, r * 3 + 0.8, 0]} center distanceFactor={45} className="ss-label">
+          <button onClick={() => onFocus(comet.name)} className="ss-name" style={{ color: "#bfe6ff", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            {comet.name}
+          </button>
+        </Html>
+      </group>
+      {/* dust/ion tail streaming away from the Sun */}
+      <group ref={tailRef}>
+        <mesh position={[0, 0, tailLen / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[r * 1.8, tailLen, 14, 1, true]} />
+          <meshBasicMaterial color="#9fe4ff" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+
+/* ---------------------------- Starman's Roadster -------------------------- */
+const RoadsterBody = ({
+  clock,
+  onFocus,
+}: {
+  clock: React.MutableRefObject<SimClock>;
+  onFocus: (name: string) => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const carRef = useRef<THREE.Group>(null);
+  const path = useMemo(() => orbitPath(ROADSTER), []);
+  const RED = "#c81e1e";
+  const wheels: [number, number][] = [[0.72, 0.5], [0.72, -0.5], [-0.72, 0.5], [-0.72, -0.5]];
+
+  useFrame((_, dt) => {
+    const au = heliocentricAU(ROADSTER, clock.current.years);
+    const [x, y, z] = toScenePosition(au);
+    ref.current?.position.set(x, y, z);
+    if (carRef.current) {
+      carRef.current.rotation.y += dt * 0.5; // tumbling in space
+      carRef.current.rotation.x += dt * 0.18;
+    }
+  });
+
+  return (
+    <group>
+      <Line points={path} color="#ff5a5a" lineWidth={1} transparent opacity={0.35} dashed dashSize={1.2} gapSize={1} />
+      <group ref={ref}>
+        <group
+          ref={carRef}
+          scale={0.9}
+          onClick={(e) => { e.stopPropagation(); onFocus(ROADSTER.name); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+          onPointerOut={() => { document.body.style.cursor = "auto"; }}
+        >
+          {/* main body */}
+          <mesh position={[0, 0.02, 0]}>
+            <boxGeometry args={[2.4, 0.32, 1.0]} />
+            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
+          </mesh>
+          {/* tapered nose */}
+          <mesh position={[1.05, -0.02, 0]}>
+            <boxGeometry args={[0.7, 0.2, 0.86]} />
+            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
+          </mesh>
+          {/* rear deck */}
+          <mesh position={[-0.95, 0.06, 0]}>
+            <boxGeometry args={[0.7, 0.26, 0.94]} />
+            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
+          </mesh>
+          {/* underbody */}
+          <mesh position={[0, -0.16, 0]}>
+            <boxGeometry args={[2.3, 0.16, 1.06]} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
+          </mesh>
+          {/* open cockpit well */}
+          <mesh position={[-0.1, 0.16, 0]}>
+            <boxGeometry args={[0.9, 0.12, 0.72]} />
+            <meshStandardMaterial color="#2a2320" roughness={0.8} />
+          </mesh>
+          {/* windshield */}
+          <mesh position={[0.4, 0.3, 0]} rotation={[0, 0, 0.7]}>
+            <boxGeometry args={[0.04, 0.34, 0.82]} />
+            <meshStandardMaterial color="#bfe6ff" transparent opacity={0.4} metalness={0.2} roughness={0.1} />
+          </mesh>
+          {/* wheels */}
+          {wheels.map(([wx, wz], i) => (
+            <group key={i} position={[wx, -0.16, wz]}>
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.27, 0.27, 0.16, 22]} />
+                <meshStandardMaterial color="#141414" roughness={0.6} />
+              </mesh>
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.12, 0.12, 0.18, 16]} />
+                <meshStandardMaterial color="#8a8f96" metalness={0.8} roughness={0.3} />
+              </mesh>
+            </group>
+          ))}
+          {/* Starman in the driver's seat */}
+          <group position={[-0.1, 0.34, -0.18]}>
+            <mesh position={[0, 0.2, 0]}>
+              <sphereGeometry args={[0.12, 18, 18]} />
+              <meshStandardMaterial color="#f2f2f2" roughness={0.5} />
+            </mesh>
+            <mesh>
+              <boxGeometry args={[0.2, 0.28, 0.2]} />
+              <meshStandardMaterial color="#eaeaea" roughness={0.6} />
+            </mesh>
+            {/* arm resting on the door */}
+            <mesh position={[0.02, -0.02, 0.22]} rotation={[0, 0, -0.3]}>
+              <boxGeometry args={[0.08, 0.24, 0.08]} />
+              <meshStandardMaterial color="#eaeaea" roughness={0.6} />
+            </mesh>
+          </group>
+        </group>
+        <Html position={[0, 1.15, 0]} center distanceFactor={40} className="ss-label">
+          <button onClick={() => onFocus(ROADSTER.name)} className="ss-name" style={{ color: "#ff8a8a", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            {ROADSTER.name}
+          </button>
+        </Html>
+      </group>
+    </group>
+  );
+};
+
+/* ------------------------------- a Black hole ----------------------------- */
+const BlackHoleBody = ({ bh, onFocus }: { bh: (typeof BLACK_HOLES)[number]; onFocus: (name: string) => void }) => {
+  const p = useMemo(
+    () => new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY)),
+    []
+  );
+  const bhR = 18;
+  const accR = 62;
+  return (
+    <group position={p.toArray()}>
+      <mesh
+        onClick={(e) => { e.stopPropagation(); onFocus(bh.name); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+        onPointerOut={() => { document.body.style.cursor = "auto"; }}
+      >
+        <sphereGeometry args={[bhR, 32, 32]} />
+        <meshBasicMaterial color="#000000" />
+      </mesh>
+      <mesh rotation={[Math.PI / 2.5, 0.5, 0]}>
+        <ringGeometry args={[bhR * 1.25, accR, 80]} />
+        <meshBasicMaterial color="#ffb24a" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[accR * 1.15, 20, 20]} />
+        <meshBasicMaterial color="#ff9b4a" transparent opacity={0.16} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <Html position={[0, accR + 22, 0]} center distanceFactor={260} className="ss-label">
+        <button onClick={() => onFocus(bh.name)} className="ss-name" style={{ color: "#ffbe8f", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+          {bh.name}
+        </button>
+      </Html>
+    </group>
+  );
+};
+
+/* ------------------------ an exoplanet orbiting a star -------------------- */
+const ExoPlanetBody = ({
+  exo,
+  starSize,
+  clock,
+  show,
+  onFocus,
+}: {
+  exo: Exoplanet;
+  starSize: number;
+  clock: React.MutableRefObject<SimClock>;
+  show: boolean;
+  onFocus: (name: string) => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const localR = starSize * 1.35 + 3 + 5 * Math.log10(1 + exo.aAU / 0.02);
+  const r = 0.6 + 0.35 * Math.cbrt(exo.radiusEarth);
+  const rate = useMemo(() => {
+    const norm = Math.min(Math.max((Math.log(exo.periodDays) - Math.log(3)) / (Math.log(3000) - Math.log(3)), 0), 1);
+    const displaySec = 14 + norm * 40;
+    return (2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec);
+  }, [exo.periodDays]);
+
+  useFrame(() => {
+    if (!ref.current || !show) return;
+    const ang = clock.current.years * rate;
+    ref.current.position.set(Math.cos(ang) * localR, Math.sin(ang) * localR * 0.12, Math.sin(ang) * localR);
+  });
+
+  if (!show) return null;
+  return (
+    <group>
+      <Line points={circlePoints(localR, 48)} color="#8aa0c0" lineWidth={1} transparent opacity={0.25} />
+      <group ref={ref}>
+        <mesh
+          onClick={(e) => { e.stopPropagation(); onFocus(exo.name); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+          onPointerOut={() => { document.body.style.cursor = "auto"; }}
+        >
+          <sphereGeometry args={[r, 28, 28]} />
+          <meshStandardMaterial color={exo.color} emissive={exo.color} emissiveIntensity={0.25} roughness={0.85} />
+        </mesh>
+        <Html position={[0, r + 0.9, 0]} center distanceFactor={26} className="ss-label">
+          <button onClick={() => onFocus(exo.name)} className="ss-name ss-moon" style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            {exo.name}
+          </button>
+        </Html>
+      </group>
+    </group>
+  );
+};
+
+const circlePoints = (radius: number, seg: number): [number, number, number][] => {
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= seg; i++) {
+    const a = (i / seg) * Math.PI * 2;
+    pts.push([Math.cos(a) * radius, 0, Math.sin(a) * radius]);
+  }
+  return pts;
+};
+
+/* ------------------------- spacecraft (heliocentric) ---------------------- */
+const SunSpacecraft = ({ craft, onFocus }: { craft: Spacecraft; onFocus: (name: string) => void }) => {
+  const p = useMemo(
+    () => new THREE.Vector3(...(craft.dir ?? [1, 0, 0])).normalize().multiplyScalar(scaleDistanceAU(craft.distanceAU ?? 1)),
+    []
+  );
+  return (
+    <group>
+      <Line points={[[0, 0, 0], p.toArray()]} color={craft.color} lineWidth={1} transparent opacity={0.1} />
+      <group position={p.toArray()}>
+        <mesh
+          onClick={(e) => { e.stopPropagation(); onFocus(craft.name); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+          onPointerOut={() => { document.body.style.cursor = "auto"; }}
+        >
+          <octahedronGeometry args={[1.3, 0]} />
+          <meshStandardMaterial color={craft.color} emissive={craft.color} emissiveIntensity={0.4} metalness={0.6} roughness={0.4} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[2.6, 12, 12]} />
+          <meshBasicMaterial color={craft.color} transparent opacity={0.14} depthWrite={false} />
+        </mesh>
+        <Html position={[0, 3.4, 0]} center distanceFactor={90} className="ss-label">
+          <button onClick={() => onFocus(craft.name)} className="ss-name" style={{ color: craft.color, pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            {craft.name}
+          </button>
+        </Html>
+      </group>
+    </group>
+  );
+};
+
+/* ---------------------- Earth satellites (ISS / Hubble) ------------------- */
+const EarthSatellites = ({
+  clock,
+  show,
+  onFocus,
+}: {
+  clock: React.MutableRefObject<SimClock>;
+  show: boolean;
+  onFocus: (name: string) => void;
+}) => {
+  const earth = useMemo(() => PLANETS.find((b) => b.name === "Earth")!, []);
+  const list = useMemo(() => SPACECRAFT.filter((s) => s.orbit === "earth"), []);
+  const earthSize = scaleRadiusKm(earth.radiusKm);
+  const refs = useRef<(THREE.Group | null)[]>([]);
+
+  useFrame(() => {
+    if (!show) return;
+    const [ex, ey, ez] = toScenePosition(heliocentricAU(earth, clock.current.years));
+    list.forEach((s, i) => {
+      const g = refs.current[i];
+      if (!g) return;
+      const localR = earthSize * 1.18 + 0.25 + i * 0.35;
+      const ang = clock.current.years * (60 + i * 40); // fast LEO, but calm at 0.1x
+      g.position.set(ex + Math.cos(ang) * localR, ey + Math.sin(ang) * localR * 0.3, ez + Math.sin(ang) * localR);
+    });
+  });
+
+  if (!show) return null;
+  return (
+    <>
+      {list.map((s, i) => (
+        <group key={s.name} ref={(el) => (refs.current[i] = el)}>
+          <mesh
+            onClick={(e) => { e.stopPropagation(); onFocus(s.name); }}
+            onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+            onPointerOut={() => { document.body.style.cursor = "auto"; }}
+          >
+            <boxGeometry args={[0.5, 0.14, 0.14]} />
+            <meshStandardMaterial color={s.color} emissive={s.color} emissiveIntensity={0.3} metalness={0.5} roughness={0.5} />
+          </mesh>
+          <Html position={[0, 0.4, 0]} center distanceFactor={22} className="ss-label">
+            <button onClick={() => onFocus(s.name)} className="ss-name ss-moon" style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+              {s.name === "International Space Station" ? "ISS" : "Hubble"}
+            </button>
+          </Html>
+        </group>
+      ))}
+    </>
+  );
+};
+
+/* ----------------------------- exotic objects ----------------------------- */
+const ExoticBody = ({ obj, onFocus }: { obj: ExoticObject; onFocus: (name: string) => void }) => {
+  const beamRef = useRef<THREE.Group>(null);
+  const p = useMemo(() => new THREE.Vector3(...obj.dir).normalize().multiplyScalar(scaleDistanceAU(obj.sceneDistance * AU_PER_LY)), []);
+  const core = obj.kind === "quasar" ? 16 : obj.kind === "neutron" ? 4 : 6;
+  useFrame((_, dt) => {
+    if (beamRef.current && obj.kind === "pulsar") beamRef.current.rotation.y += dt * 2.5;
+  });
+  return (
+    <group position={p.toArray()}>
+      <mesh
+        onClick={(e) => { e.stopPropagation(); onFocus(obj.name); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+        onPointerOut={() => { document.body.style.cursor = "auto"; }}
+      >
+        <sphereGeometry args={[core, 28, 28]} />
+        <meshBasicMaterial color={obj.color} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[core * 2.4, 20, 20]} />
+        <meshBasicMaterial color={obj.color} transparent opacity={0.22} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+
+      {obj.kind === "pulsar" && (
+        <group ref={beamRef} rotation={[0.5, 0, 0.3]}>
+          {[1, -1].map((s) => (
+            <mesh key={s} position={[0, s * core * 5, 0]} rotation={[s > 0 ? 0 : Math.PI, 0, 0]}>
+              <coneGeometry args={[core * 1.6, core * 9, 20, 1, true]} />
+              <meshBasicMaterial color="#cfe6ff" transparent opacity={0.16} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {obj.kind === "quasar" && (
+        <group rotation={[0.3, 0, 0.2]}>
+          {[1, -1].map((s) => (
+            <mesh key={s} position={[0, s * core * 7, 0]} rotation={[s > 0 ? 0 : Math.PI, 0, 0]}>
+              <coneGeometry args={[core * 1.3, core * 14, 22, 1, true]} />
+              <meshBasicMaterial color="#9fd0ff" transparent opacity={0.15} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          ))}
+          <mesh rotation={[Math.PI / 2.4, 0, 0]}>
+            <ringGeometry args={[core * 1.4, core * 3.6, 56]} />
+            <meshBasicMaterial color="#ffce8f" transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        </group>
+      )}
+
+      {obj.kind === "magnetar" &&
+        [0, 1, 2].map((i) => (
+          <mesh key={i} rotation={[Math.PI / 2, 0, (i * Math.PI) / 3]}>
+            <torusGeometry args={[core * 2.3, core * 0.12, 8, 44]} />
+            <meshBasicMaterial color="#ff9bf0" transparent opacity={0.28} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+
+      <Html position={[0, core * 3 + 3, 0]} center distanceFactor={obj.kind === "quasar" ? 320 : 230} className="ss-label">
+        <button onClick={() => onFocus(obj.name)} className="ss-name" style={{ color: obj.color, pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+          {obj.name} · {obj.typeLabel}
+        </button>
+      </Html>
+    </group>
+  );
+};
+
+/* --------------------- catalog stars (the real ~300) ---------------------- */
+// Rendered as a single InstancedMesh for performance; hover shows one label,
+// click opens the detail panel. Featured stars are excluded to avoid dupes.
+const CatalogStars = ({ onFocus }: { onFocus: (name: string) => void }) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const list = useMemo(() => {
+    const featured = new Set(NEARBY_STARS.map((s) => s.name.toLowerCase()));
+    return STAR_CATALOG.filter((s) => !featured.has(s.name.toLowerCase()));
+  }, []);
+  const [hover, setHover] = useState(-1);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    const col = new THREE.Color();
+    list.forEach((s, i) => {
+      const dir = new THREE.Vector3(...s.pos).normalize();
+      const p = dir.multiplyScalar(scaleDistanceAU(s.ly * AU_PER_LY));
+      const size = catalogSize(s.r) + Math.max(0, 3 - s.mag) * 0.8;
+      m.makeScale(size, size, size);
+      m.setPosition(p.x, p.y, p.z);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, col.set(s.color));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [list]);
+
+  const hoverStar = hover >= 0 ? list[hover] : null;
+  const hoverPos = useMemo(
+    () => (hoverStar ? new THREE.Vector3(...hoverStar.pos).normalize().multiplyScalar(scaleDistanceAU(hoverStar.ly * AU_PER_LY)) : null),
+    [hover] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  return (
+    <>
+      <instancedMesh
+        ref={meshRef}
+        args={[undefined, undefined, list.length]}
+        onClick={(e) => { e.stopPropagation(); if (e.instanceId != null) onFocus(list[e.instanceId].name); }}
+        onPointerMove={(e) => { e.stopPropagation(); if (e.instanceId != null) { setHover(e.instanceId); document.body.style.cursor = "pointer"; } }}
+        onPointerOut={() => { setHover(-1); document.body.style.cursor = "auto"; }}
+      >
+        <sphereGeometry args={[1, 24, 24]} />
+        <meshBasicMaterial toneMapped={false} />
+      </instancedMesh>
+      {hoverStar && hoverPos && (
+        <Html position={hoverPos.toArray()} center distanceFactor={200} className="ss-label">
+          <span className="ss-name ss-star" style={{ color: hoverStar.color }}>{hoverStar.name} · {hoverStar.ly} ly</span>
+        </Html>
+      )}
+    </>
+  );
+};
+
+/* ------------------------------ nearby stars ------------------------------ */
+const NearbyStars = ({
+  lightYears,
+  onFocus,
+  clock,
+  showMinor,
+  focusName,
+}: {
+  lightYears: number;
+  onFocus: (name: string) => void;
+  clock: React.MutableRefObject<SimClock>;
+  showMinor: boolean;
+  focusName: string | null;
+}) => {
+  const placed = useMemo(
+    () =>
+      NEARBY_STARS.map((s) => {
+        const dir = new THREE.Vector3(...s.dir).normalize();
+        const r = scaleDistanceAU(s.distance * AU_PER_LY);
+        return { star: s, p: dir.multiplyScalar(r), size: starRenderSize(s) };
+      }),
+    []
+  );
+  return (
+    <group>
+      {placed.map(({ star, p, size }) => {
+        const reached = star.distance <= lightYears;
+        return (
+          <group key={star.name} position={p.toArray()}>
+            {/* animated plasma photosphere (unlit — stars emit their own light) */}
+            <StarSurface
+              color={star.color}
+              size={size}
+              segments={36}
+              onClick={(e) => { e.stopPropagation(); onFocus(star.name); }}
+              onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+              onPointerOut={() => { document.body.style.cursor = "auto"; }}
+            />
+            {/* soft glow, brighter for luminous stars */}
+            <mesh>
+              <sphereGeometry args={[size * 1.7, 20, 20]} />
+              <meshBasicMaterial color={star.color} transparent opacity={0.1 + star.lum * 0.14} depthWrite={false} />
+            </mesh>
+            {/* reached → gold-tinted outer glow, keeping the star's true colour */}
+            {reached && (
+              <mesh>
+                <sphereGeometry args={[size * 2.3, 20, 20]} />
+                <meshBasicMaterial color="#ffd166" transparent opacity={0.16} depthWrite={false} />
+              </mesh>
+            )}
+            {/* leader line from the star up to its name tag */}
+            <Line
+              points={[[0, size * 1.05, 0], [0, size * 3.4, 0]]}
+              color={reached ? "#ffd166" : star.color}
+              lineWidth={1}
+              transparent
+              opacity={0.55}
+            />
+            <Html position={[0, size * 3.4, 0]} center distanceFactor={150} className="ss-label">
+              <button
+                onClick={() => onFocus(star.name)}
+                title={`${star.spectral} · ${star.distance} ly — click for details`}
+                className="ss-name ss-star"
+                style={{ color: reached ? "#ffd166" : star.color, pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+              >
+                {star.name} · {star.distance} ly
+              </button>
+            </Html>
+            {/* known exoplanets — visible when zoomed in or when this star is focused */}
+            {EXOPLANETS.filter((e) => e.host === star.name).map((e) => (
+              <ExoPlanetBody key={e.name} exo={e} starSize={size} clock={clock} show={showMinor || focusName === star.name} onFocus={onFocus} />
+            ))}
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+/* --------------------------- the birthday light --------------------------- */
+const LightSphere = ({
+  lightYears,
+  animating,
+  onDone,
+}: {
+  lightYears: number;
+  animating: boolean;
+  onDone: () => void;
+}) => {
+  const ref = useRef<THREE.Group>(null);
+  const start = useRef<number | null>(null);
+  const target = scaleDistanceAU(lightYears * AU_PER_LY);
+  const DURATION = 4;
+
+  useFrame((state) => {
+    if (!ref.current) return;
+    if (animating) {
+      if (start.current === null) start.current = state.clock.getElapsedTime();
+      const t = Math.min((state.clock.getElapsedTime() - start.current) / DURATION, 1);
+      const e = 1 - Math.pow(1 - t, 3);
+      ref.current.scale.setScalar(Math.max(e * target, 0.001));
+      if (t >= 1) {
+        start.current = null;
+        onDone();
+      }
+    } else {
+      ref.current.scale.setScalar(target);
+    }
+  });
+
+  if (lightYears <= 0) return null;
+  return (
+    <group ref={ref}>
+      {/* glowing boundary */}
+      <mesh>
+        <sphereGeometry args={[1, 64, 64]} />
+        <meshBasicMaterial color="#37f0cf" transparent opacity={0.18} wireframe />
+      </mesh>
+      {/* faint volume so the bubble reads as a sphere */}
+      <mesh>
+        <sphereGeometry args={[1, 48, 48]} />
+        <meshBasicMaterial color="#2fe0c0" transparent opacity={0.05} side={THREE.BackSide} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+};
+
+/* ---------------------------- camera director ----------------------------- */
+/** Flies the camera to focus any body (Sun / planet / star / the light-sphere)
+ *  when `goal.token` changes, then keeps the target locked on it — tracking
+ *  moving planets so you can orbit and zoom around the focused body. Runs each
+ *  transition ONCE per token so it never fights manual zoom afterwards. */
+const CameraDirector = ({
+  goal,
+  reach,
+  clock,
+  controlsRef,
+}: {
+  goal: { name: string; token: number } | null;
+  reach: number;
+  clock: React.MutableRefObject<SimClock>;
+  controlsRef: React.MutableRefObject<any>;
+}) => {
+  const { camera } = useThree();
+  const st = useRef({
+    token: -1,
+    phase: "idle" as "idle" | "fly" | "track",
+    t0: null as number | null,
+    from: new THREE.Vector3(),
+    fromT: new THREE.Vector3(),
+    dist: 0,
+    name: "",
+    prev: new THREE.Vector3(),
+  });
+
+  useFrame((state) => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const s = st.current;
+
+    if (goal && goal.token !== s.token) {
+      s.token = goal.token;
+      s.name = goal.name;
+      s.phase = "fly";
+      s.t0 = null;
+      s.from.copy(camera.position);
+      s.fromT.copy(controls.target);
+      s.dist = bodyFrameDist(goal.name, reach);
+    }
+    if (s.phase === "idle") return;
+
+    const targetNow = bodyScenePos(s.name, clock.current.years);
+
+    if (s.phase === "fly") {
+      if (s.t0 === null) s.t0 = state.clock.getElapsedTime();
+      const k = Math.min((state.clock.getElapsedTime() - s.t0) / 1.9, 1);
+      const e = 1 - Math.pow(1 - k, 3);
+      controls.target.copy(s.fromT).lerp(targetNow, e);
+      const dir = s.from.clone().sub(s.fromT);
+      if (dir.lengthSq() < 1e-6) dir.set(0.6, 0.45, 0.6);
+      dir.normalize();
+      const camGoal = targetNow.clone().add(dir.multiplyScalar(s.dist));
+      camera.position.lerpVectors(s.from, camGoal, e);
+      controls.update();
+      if (k >= 1) {
+        s.phase = "track";
+        s.prev.copy(targetNow);
+      }
+    } else if (s.phase === "track") {
+      // Follow the (possibly orbiting) body: shift camera + target by its motion,
+      // preserving whatever orbit/zoom the user has applied around it.
+      const delta = targetNow.clone().sub(s.prev);
+      if (delta.lengthSq() > 1e-12) {
+        controls.target.add(delta);
+        camera.position.add(delta);
+        s.prev.copy(targetNow);
+        controls.update();
+      }
+    }
+  });
+  return null;
+};
+
+/* ----------------------------- flythrough cam ----------------------------- */
+const FlythroughCamera = ({
+  active,
+  radius,
+  controlsRef,
+}: {
+  active: boolean;
+  radius: number;
+  controlsRef: React.MutableRefObject<any>;
+}) => {
+  const { camera } = useThree();
+  const angle = useRef(0);
+  useFrame((_, delta) => {
+    if (!active) return;
+    angle.current += delta * 0.25;
+    const r = Math.max(radius * 2.4, 120);
+    camera.position.set(
+      Math.cos(angle.current) * r,
+      Math.sin(angle.current * 0.5) * r * 0.35 + 20,
+      Math.sin(angle.current) * r
+    );
+    camera.lookAt(0, 0, 0);
+    controlsRef.current?.update?.();
+  });
+  return null;
+};
+
+/* ------------------------------- particle belt ----------------------------- */
+const Belt = ({
+  inner,
+  outer,
+  count,
+  thickness,
+  color,
+  size,
+  meanPeriodYears,
+  clock,
+}: {
+  inner: number;
+  outer: number;
+  count: number;
+  thickness: number;
+  color: string;
+  size: number;
+  meanPeriodYears: number;
+  clock: React.MutableRefObject<SimClock>;
+}) => {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const au = inner + Math.random() * (outer - inner);
+      const ang = Math.random() * Math.PI * 2;
+      const sr = scaleDistanceAU(au);
+      const yJitter = (Math.random() - 0.5) * scaleDistanceAU(thickness + 0.0001) * 0.4;
+      arr[i * 3] = Math.cos(ang) * sr;
+      arr[i * 3 + 1] = yJitter;
+      arr[i * 3 + 2] = Math.sin(ang) * sr;
+    }
+    return arr;
+  }, [inner, outer, count, thickness]);
+
+  useFrame(() => {
+    if (ref.current) ref.current.rotation.y = (clock.current.years / meanPeriodYears) * 2 * Math.PI;
+  });
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial color={color} size={size} sizeAttenuation transparent opacity={0.7} />
+    </points>
+  );
+};
+
+/* ------------------------------ Oort cloud shell --------------------------- */
+const OortCloud = () => {
+  const positions = useMemo(() => {
+    const arr = new Float32Array(OORT_CLOUD.count * 3);
+    for (let i = 0; i < OORT_CLOUD.count; i++) {
+      const au = OORT_CLOUD.inner + Math.random() * (OORT_CLOUD.outer - OORT_CLOUD.inner);
+      const sr = scaleDistanceAU(au);
+      const u = Math.random() * 2 - 1;
+      const phi = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      arr[i * 3] = sr * s * Math.cos(phi);
+      arr[i * 3 + 1] = sr * u;
+      arr[i * 3 + 2] = sr * s * Math.sin(phi);
+    }
+    return arr;
+  }, []);
+  return (
+    <points>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial color="#9fb4d8" size={0.5} sizeAttenuation transparent opacity={0.4} />
+    </points>
+  );
+};
+
+/* ------------------------------ heliosphere shells ------------------------- */
+const Heliosphere = () => {
+  const ts = scaleDistanceAU(HELIOSPHERE.terminationShock);
+  const hp = scaleDistanceAU(HELIOSPHERE.heliopause);
+  return (
+    <group>
+      <mesh scale={[1, 0.92, 1.12]}>
+        <sphereGeometry args={[hp, 48, 48]} />
+        <meshBasicMaterial color="#4aa3c8" transparent opacity={0.05} side={THREE.BackSide} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[ts, 48, 48]} />
+        <meshBasicMaterial color="#6ab8d8" transparent opacity={0.04} side={THREE.BackSide} />
+      </mesh>
+      <Html position={[0, hp * 0.72, 0]} center distanceFactor={140} className="ss-label">
+        <span className="ss-name ss-helio">Heliopause</span>
+      </Html>
+    </group>
+  );
+};
+
+const EclipticGrid = () => (
+  <gridHelper args={[scaleDistanceAU(200) * 2, 48, "#1c2546", "#141b35"]} />
+);
+
+
+/* --------------------------------- the scene ------------------------------- */
+const Scene = ({
+  clock,
+  showMinor,
+  setShowMinor,
+  lightYears,
+  displayLY,
+  animatingLight,
+  setAnimatingLight,
+  flying,
+  controlsRef,
+  goal,
+  onFocus,
+  focusName,
+}: {
+  clock: React.MutableRefObject<SimClock>;
+  showMinor: boolean;
+  setShowMinor: (v: boolean) => void;
+  lightYears: number;
+  displayLY: number;
+  animatingLight: boolean;
+  setAnimatingLight: (v: boolean) => void;
+  flying: boolean;
+  controlsRef: React.MutableRefObject<any>;
+  goal: { name: string; token: number } | null;
+  onFocus: (name: string) => void;
+  focusName: string | null;
+}) => (
+  <>
+    <ambientLight intensity={0.25} />
+    {/* layered, denser, faintly-coloured starfield — more wonder */}
+    <Stars radius={4000} depth={600} count={IS_MOBILE ? 6000 : 16000} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
+    <Stars radius={9000} depth={200} count={IS_MOBILE ? 3000 : 7000} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
+    <TimeKeeper clock={clock} onZoom={setShowMinor} />
+
+    <EclipticGrid />
+    <Sun onFocus={onFocus} />
+
+    {PLANETS.map((p) => (
+      <Planet key={p.name} body={p} clock={clock} showMinor={showMinor} onFocus={onFocus} />
+    ))}
+
+    {MOONS.map((m) => {
+      const parent = PLANETS.find((p) => p.name === m.parent)!;
+      return <MoonBody key={m.name} moon={m} parent={parent} clock={clock} show={showMinor} onFocus={onFocus} />;
+    })}
+
+    {COMETS.map((c) => (
+      <CometBody key={c.name} comet={c} clock={clock} onFocus={onFocus} />
+    ))}
+    <RoadsterBody clock={clock} onFocus={onFocus} />
+    {SPACECRAFT.filter((s) => s.orbit === "sun").map((s) => (
+      <SunSpacecraft key={s.name} craft={s} onFocus={onFocus} />
+    ))}
+    <EarthSatellites clock={clock} show={showMinor} onFocus={onFocus} />
+    {EXOTIC_OBJECTS.map((o) => (
+      <ExoticBody key={o.name} obj={o} onFocus={onFocus} />
+    ))}
+
+    <Belt {...ASTEROID_BELT} color="#8c8170" size={0.18} meanPeriodYears={4.6} clock={clock} />
+    <Belt {...KUIPER_BELT} color="#7f93b8" size={0.22} meanPeriodYears={285} clock={clock} />
+    <Heliosphere />
+    <OortCloud />
+
+    <CatalogStars onFocus={onFocus} />
+    <NearbyStars lightYears={displayLY} onFocus={onFocus} clock={clock} showMinor={showMinor} focusName={focusName} />
+
+    {BLACK_HOLES.map((bh) => (
+      <BlackHoleBody key={bh.name} bh={bh} onFocus={onFocus} />
+    ))}
+    <LightSphere lightYears={displayLY} animating={animatingLight} onDone={() => setAnimatingLight(false)} />
+
+    <FlythroughCamera active={flying} radius={lightYears > 0 ? scaleDistanceAU(lightYears * AU_PER_LY) : 120} controlsRef={controlsRef} />
+    <CameraDirector goal={goal} reach={lightYears} clock={clock} controlsRef={controlsRef} />
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enablePan
+      zoomToCursor
+      screenSpacePanning
+      enableDamping
+      dampingFactor={0.09}
+      enabled={!flying}
+      minDistance={0.4}
+      maxDistance={MAX_ZOOM}
+      zoomSpeed={0.55}
+      panSpeed={1.0}
+      rotateSpeed={0.55}
+    />
+  </>
+);
+
+export interface SolarSystemHandle {
+  expandLight: () => void;
+  flythrough: () => void;
+  exportPNG: () => void;
+}
+
+interface SolarSystemProps {
+  lightYears?: number;
+  birthDate?: string;
+}
+
+/* ------------------------------- the wrapper ------------------------------ */
+export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
+  ({ lightYears = 0, birthDate = "" }, ref) => {
+    const clock = useRef<SimClock>({ years: EPOCH_OFFSET, speed: 0.1, paused: false, camDist: 80 });
+    const controlsRef = useRef<any>(null);
+    const glRef = useRef<THREE.WebGLRenderer | null>(null);
+    const sceneRef = useRef<THREE.Scene | null>(null);
+    const camRef = useRef<THREE.Camera | null>(null);
+
+    const [showMinor, setShowMinor] = useState(false);
+    const [speed, setSpeed] = useState(0.1);
+    const [scrubYears, setScrubYears] = useState<number | null>(null); // timeline scrubber
+    const [paused, setPaused] = useState(false);
+    const [animatingLight, setAnimatingLight] = useState(false);
+    const [flying, setFlying] = useState(false);
+    const [goal, setGoal] = useState<{ name: string; token: number } | null>(null);
+    const [focusName, setFocusName] = useState<string | null>(null);
+    const [selected, setSelected] = useState<string | null>(null);
+    const [isFs, setIsFs] = useState(false);
+    const [exploreOpen, setExploreOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const goalToken = useRef(0);
+
+    // Fly the camera to focus a body (Sun / planet / star / light).
+    const focus = (name: string) => {
+      setFlying(false);
+      goalToken.current += 1;
+      setGoal({ name, token: goalToken.current });
+      setFocusName(name === "__light__" || name === "Sun" ? null : name);
+    };
+
+    // Click a body → open its detail panel (+ fly to it, unless it's a moon or
+    // exoplanet, where you're already up close and a camera jump would jar).
+    const onPick = (name: string) => {
+      setSelected(name);
+      const local = MOONS.some((m) => m.name === name) || EXOPLANETS.some((e) => e.name === name);
+      if (!local) focus(name);
+    };
+
+    const toggleFullscreen = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      if (!document.fullscreenElement) el.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    };
+    useEffect(() => {
+      const onChange = () => setIsFs(!!document.fullscreenElement);
+      document.addEventListener("fullscreenchange", onChange);
+      return () => document.removeEventListener("fullscreenchange", onChange);
+    }, []);
+
+    const detail = selected ? getBodyInfo(selected) : null;
+    // Timeline scrubber overrides the shown reach; camera framing still uses the full value.
+    const displayLY = scrubYears ?? lightYears;
+
+    // "Your star" — the farthest real star the light has reached.
+    const yourStar = useMemo(() => {
+      if (lightYears <= 0) return null;
+      const all = [
+        ...NEARBY_STARS.map((s) => ({ name: s.name, ly: s.distance })),
+        ...STAR_CATALOG.map((s) => ({ name: s.name, ly: s.ly })),
+      ].filter((s) => s.ly <= lightYears);
+      if (!all.length) return null;
+      return all.reduce((a, b) => (b.ly > a.ly ? b : a));
+    }, [lightYears]);
+
+    // When a new light-years value lands (after calculate), pull the camera back
+    // to frame the full reach and grow the light. Runs post-commit — no race.
+    useEffect(() => {
+      if (lightYears > 0) {
+        focus("__light__");
+        setAnimatingLight(true);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lightYears]);
+
+    const exportPNG = () => {
+      const gl = glRef.current, scene = sceneRef.current, cam = camRef.current;
+      if (!gl || !scene || !cam) return;
+      gl.render(scene, cam);
+      const a = document.createElement("a");
+      a.href = gl.domElement.toDataURL("image/png");
+      a.download = "light_journey.png";
+      a.click();
+    };
+
+    useImperativeHandle(ref, () => ({
+      expandLight: () => {
+        focus("__light__");
+        setAnimatingLight(true);
+      },
+      flythrough: () => setFlying((v) => !v),
+      exportPNG,
+    }));
+
+    const setSpeedVal = (v: number) => {
+      clock.current.speed = v;
+      setSpeed(v);
+    };
+    const togglePause = () => {
+      clock.current.paused = !clock.current.paused;
+      setPaused(clock.current.paused);
+    };
+
+    return (
+      <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-[#04050c]">
+        <Canvas
+          camera={{ position: [70, 46, 70], fov: CAMERA_FOV, near: 0.02, far: 60_000 }}
+          dpr={[1, IS_MOBILE ? 1.5 : 2]}
+          gl={{ preserveDrawingBuffer: true }}
+          onCreated={({ gl, scene, camera }) => {
+            glRef.current = gl;
+            sceneRef.current = scene;
+            camRef.current = camera;
+          }}
+        >
+          <color attach="background" args={["#04050c"]} />
+          <Scene
+            clock={clock}
+            showMinor={showMinor}
+            setShowMinor={setShowMinor}
+            lightYears={lightYears}
+            displayLY={displayLY}
+            animatingLight={animatingLight}
+            setAnimatingLight={setAnimatingLight}
+            flying={flying}
+            controlsRef={controlsRef}
+            goal={goal}
+            onFocus={onPick}
+            focusName={focusName}
+          />
+        </Canvas>
+
+        {/* HUD */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full glass px-3 py-2">
+            <button onClick={togglePause} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+              {paused ? "Play" : "Pause"}
+            </button>
+            <span className="h-4 w-px bg-white/10" />
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Speed</span>
+            <input
+              type="range"
+              min={0.1}
+              max={40}
+              step={0.1}
+              value={speed}
+              onChange={(e) => setSpeedVal(parseFloat(e.target.value))}
+              className="h-1 w-24 cursor-pointer accent-primary"
+            />
+            <span className="font-mono-num tnum w-10 text-xs text-primary">{speed.toFixed(1)}×</span>
+          </div>
+
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full glass px-2.5 py-2">
+            <button
+              onClick={toggleFullscreen}
+              title={isFs ? "Exit full screen" : "Full screen"}
+              className="flex items-center rounded-full px-2 py-1 text-foreground/90 transition-colors hover:text-primary"
+            >
+              {isFs ? <Minimize2 className="h-4 w-4" strokeWidth={1.5} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.5} />}
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setExploreOpen((v) => !v)}
+                title="Jump to a destination"
+                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
+              >
+                <Compass className="h-4 w-4" strokeWidth={1.5} />
+                Explore
+              </button>
+              {exploreOpen && (
+                <div className="absolute bottom-full right-0 mb-3 w-52 rounded-2xl glass p-2 text-left">
+                  {EXPLORE_GROUPS.map((g) => (
+                    <div key={g.label} className="mb-1 last:mb-0">
+                      <p className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/60">{g.label}</p>
+                      {g.items.map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => { onPick(n); setExploreOpen(false); }}
+                          className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-white/[0.06] hover:text-primary"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {focusName && (
+              <button
+                onClick={() => {
+                  focus("Sun");
+                  setSelected(null);
+                }}
+                className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
+              >
+                ← Sun
+              </button>
+            )}
+            {lightYears > 0 && (
+              <>
+                <button
+                  onClick={() => {
+                    focus("__light__");
+                    setAnimatingLight(true);
+                  }}
+                  className="rounded-full px-3 py-1 text-xs font-medium text-beam transition-colors hover:text-beam/80"
+                >
+                  Zoom to my light
+                </button>
+                <button onClick={() => setFlying((v) => !v)} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+                  {flying ? "Stop" : "Flythrough"}
+                </button>
+                <button onClick={exportPNG} title="Save frame as PNG" className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+                  Save
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Timeline scrubber — drag across your life; watch the light expand/retract */}
+        {lightYears > 0 && (
+          <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl glass px-4 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">Your light through the years</span>
+              <span className="font-mono-num tnum text-beam">{displayLY.toFixed(1)} ly · age {Math.round(scrubYears ?? lightYears)}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={lightYears}
+              step={0.1}
+              value={scrubYears ?? lightYears}
+              onChange={(e) => { const v = parseFloat(e.target.value); setScrubYears(v >= lightYears - 0.05 ? null : v); }}
+              className="h-1 w-full cursor-pointer accent-beam"
+            />
+            {yourStar && (
+              <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+                {displayLY >= yourStar.ly ? (
+                  <>
+                    Farthest star reached:{" "}
+                    <button onClick={() => onPick(yourStar.name)} className="font-medium text-primary hover:underline">{yourStar.name}</button>{" "}
+                    ({yourStar.ly} ly)
+                  </>
+                ) : (
+                  <>Your light is {displayLY.toFixed(1)} ly out, still reaching…</>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Detail panel (on click) replaces the info chip; falls back to hints. */}
+        {detail ? (
+          <div className="pointer-events-auto absolute left-4 top-4 w-[min(20rem,calc(100%-2rem))] rounded-2xl glass p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-base font-semibold text-foreground">{detail.name}</h3>
+                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary/80">{detail.type}</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-muted-foreground transition-colors hover:text-foreground" title="Close">
+                <X className="h-4 w-4" strokeWidth={1.5} />
+              </button>
+            </div>
+            {birthDate && formatArrival(birthDate, detail.lightSeconds) && (
+              <div className="mt-2.5 rounded-lg border border-beam/20 bg-beam/[0.06] px-2.5 py-2">
+                <div className="flex items-start gap-2">
+                  <Radio className="mt-0.5 h-3.5 w-3.5 shrink-0 text-beam" strokeWidth={1.5} />
+                  <p className="text-[11px] font-medium leading-snug text-beam">{formatArrival(birthDate, detail.lightSeconds)}</p>
+                </div>
+                {(() => {
+                  const yr = arrivalYear(birthDate, detail.lightSeconds);
+                  const ev = yr ? eventForYear(yr) : null;
+                  return ev ? (
+                    <p className="mt-1.5 border-t border-beam/15 pt-1.5 text-[11px] leading-snug text-muted-foreground">
+                      That year ({yr}), {ev}.
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+            )}
+            <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">{detail.blurb}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {detail.stats.map((s) => (
+                <div key={s.label} className="rounded-lg bg-white/[0.03] px-2 py-1.5">
+                  <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{s.label}</p>
+                  <p className="font-mono-num tnum text-xs text-foreground">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-3 border-t border-white/5 pt-3 text-[11px]">
+              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">More</span>
+              <a href={detail.links.grokipedia} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">Grokipedia ↗</a>
+              <a href={detail.links.nasa} target="_blank" rel="noopener noreferrer" className="text-muted-foreground transition-colors hover:text-foreground">NASA</a>
+            </div>
+          </div>
+        ) : (
+          <div className="pointer-events-none absolute left-4 top-4 max-w-[13rem] rounded-xl glass px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+            {focusName ? (
+              <span>
+                Focused on <span className="font-medium text-foreground">{focusName}</span>. Drag to
+                orbit · scroll to zoom · click any body for details.
+              </span>
+            ) : (
+              <span>Real orbits · true-scale between stars. Click any body for details, or scroll to zoom.</span>
+            )}
+          </div>
+        )}
+        <div className="pointer-events-none absolute right-4 top-4 rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground">
+          {showMinor ? "moons + dwarfs visible" : "zoom in for moons & dwarfs"}
+        </div>
+      </div>
+    );
+  }
+);
+
+SolarSystem.displayName = "SolarSystem";
