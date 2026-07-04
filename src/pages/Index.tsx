@@ -8,8 +8,7 @@ import { grokipediaUrl } from "@/data/bodyInfo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useReveal } from "@/hooks/useReveal";
 import { useAmbient } from "@/hooks/useAmbient";
-
-const SECONDS_PER_ORBIT = 3135;
+import { SECONDS_PER_ORBIT } from "@/lib/constants";
 
 interface Result {
   years: number;
@@ -242,8 +241,8 @@ const Index = () => {
       )}
 
       <footer className="relative z-10 border-t border-white/5 px-5 py-10 text-center text-xs text-muted-foreground/60">
-        Light covers 9.46 trillion km a year. Distances and stars are approximate,
-        for wonder over precision.
+        Light travels 1,079,252,848.8 km/h — 9.46 trillion km a year. Distances and
+        stars are approximate, for wonder over precision.
       </footer>
     </main>
   );

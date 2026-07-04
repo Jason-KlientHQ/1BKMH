@@ -1,8 +1,7 @@
 import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER, SPACECRAFT, EXOTIC_OBJECTS } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 
-const SEC_PER_AU = 499.004784; // one-way light-time across 1 AU
-const SEC_PER_LY = 31_557_600; // seconds in one light-year of travel (1 Julian yr)
+import { SEC_PER_AU, SEC_PER_LY } from "@/lib/constants"; // derived from c = 1,079,252,848.8 km/h
 
 // Stellar masses (M☉) for the featured stars — measured values.
 const STAR_MASS: Record<string, number> = {

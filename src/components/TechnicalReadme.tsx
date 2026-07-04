@@ -35,14 +35,22 @@ export const TechnicalReadme = ({ open, onClose }: { open: boolean; onClose: () 
               distance tangible: which real stars has your light already passed?
             </Section>
 
+            <Section title="## The speed of light (source of truth)">
+              Every light-based figure derives from one constant:
+              <Code>{`c = 1,079,252,848.8 km/h   (= 299,792.458 km/s)
+1 light-year = c × 8,766 h = 9.4607e12 km   // hours in a Julian year
+1 AU light-time = 149,597,870.7 km ÷ c = 499.00 s`}</Code>
+            </Section>
+
             <Section title="## The light calculation">
-              <Code>{`ageSeconds  = now - birthDate           // exact, to the second
+              <Code>{`ageSeconds  = now - birthDate            // exact, to the second
 lightYears  = ageSeconds / secondsPerYear
-distance_km = lightYears * 9.4607e12    // km per light-year`}</Code>
+distance_km = lightYears × (c × 8,766 h) // lightYears × 9.4607e12 km`}</Code>
               A body at distance <C>D</C> light-years is "reached" once{" "}
               <C>lightYears ≥ D</C>. Arrival date = <C>birthDate + D years</C> (for
               stars) or <C>birthDate + D_AU × 499s</C> (for solar-system bodies,
-              where light crosses 1 AU in 499 seconds).
+              where light crosses 1 AU in 499 seconds at{" "}
+              <C>1,079,252,848.8 km/h</C>).
             </Section>
 
             <Section title="## Orbits around the Sun">
@@ -50,9 +58,9 @@ distance_km = lightYears * 9.4607e12    // km per light-year`}</Code>
               orbit. One lap of a circle at 1 AU has circumference{" "}
               <C>2π × 1 AU ≈ 9.4×10⁸ km</C>, which light crosses in:
               <Code>{`SECONDS_PER_ORBIT = 2π × 1 AU / c
-                  = 939,951,143 km / 299,792 km/s
-                  ≈ 3,135 s  (~52.3 minutes)
-totalOrbits = ageSeconds / 3,135`}</Code>
+                  = 939,951,143 km ÷ (1,079,252,848.8 km/h ÷ 3600)
+                  ≈ 3,135.3 s  (~52.3 minutes)
+totalOrbits = ageSeconds / 3,135.3`}</Code>
             </Section>
 
             <Section title="## Orbital mechanics (the planets & comets)">
