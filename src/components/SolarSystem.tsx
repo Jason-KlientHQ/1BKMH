@@ -46,6 +46,7 @@ import {
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePosition } from "@/astrometry/positions";
+import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
 import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
@@ -277,6 +278,15 @@ const Sun = ({ onFocus }: { onFocus: (name: string) => void }) => {
   );
 };
 
+/** Saturn's ring plane is tilted ~26.73° to its orbital plane — stable, not wobbling. */
+const SATURN_RING_TILT = (26.73 * Math.PI) / 180;
+
+const planetOblateness = (name: string): [number, number, number] => {
+  if (name === "Jupiter" || name === "Saturn") return [1, 0.91, 1];
+  if (name === "Uranus" || name === "Neptune") return [1, 0.96, 1];
+  return [1, 1, 1];
+};
+
 /* -------------------------------- a Planet -------------------------------- */
 const Planet = ({
   body,
@@ -289,22 +299,40 @@ const Planet = ({
   showMinor: boolean;
   onFocus: (name: string) => void;
 }) => {
-  const ref = useRef<THREE.Group>(null);
+  const orbitRef = useRef<THREE.Group>(null);
+  const spinRef = useRef<THREE.Group>(null);
   const dropRef = useRef<THREE.Mesh>(null);
   const path = useMemo(() => orbitPath(body), [body]);
   const r = scaleRadiusKm(body.radiusKm);
   const isDwarf = body.kind === "dwarf";
+  const oblate = planetOblateness(body.name);
+  const ringInner = body.ring ? scaleRadiusKm(body.ring.inner) : 0;
+  const ringOuter = body.ring ? scaleRadiusKm(body.ring.outer) : 0;
+  const ringMid = body.ring ? scaleRadiusKm(100_000) : 0;
 
   useFrame(() => {
-    if (!ref.current) return;
+    if (!orbitRef.current) return;
     const au = heliocentricAU(body, clock.current.years);
     const [x, y, z] = toScenePosition(au);
-    ref.current.position.set(x, y, z);
-    ref.current.rotation.y += 0.01;
+    orbitRef.current.position.set(x, y, z);
+    if (spinRef.current) spinRef.current.rotation.y += 0.008;
     if (dropRef.current) dropRef.current.position.set(x, 0, z);
   });
 
   const showLabel = !isDwarf || showMinor;
+  const pickHandlers = {
+    onClick: (e: ThreeEvent<MouseEvent>) => {
+      e.stopPropagation();
+      onFocus(body.name);
+    },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      document.body.style.cursor = "pointer";
+    },
+    onPointerOut: () => {
+      document.body.style.cursor = "auto";
+    },
+  };
 
   return (
     <group>
@@ -314,36 +342,53 @@ const Planet = ({
         <meshBasicMaterial color={body.color} transparent opacity={0.3} side={THREE.DoubleSide} />
       </mesh>
 
-      <group ref={ref}>
-        <mesh
-          onClick={(e) => {
-            e.stopPropagation();
-            onFocus(body.name);
-          }}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            document.body.style.cursor = "pointer";
-          }}
-          onPointerOut={() => {
-            document.body.style.cursor = "auto";
-          }}
-        >
-          <sphereGeometry args={[r, 32, 32]} />
-          <meshStandardMaterial
-            color={body.color}
-            emissive={body.emissive ?? "#000000"}
-            emissiveIntensity={body.emissive ? 0.5 : 0}
-            roughness={0.85}
-            metalness={0.05}
-          />
-        </mesh>
-
+      <group ref={orbitRef}>
+        {/* Rings stay fixed in space — only the planet body spins. */}
         {body.ring && (
-          <mesh rotation={[-Math.PI / 2 + 0.46, 0, 0]}>
-            <ringGeometry args={[scaleRadiusKm(body.ring.inner), scaleRadiusKm(body.ring.outer), 64]} />
-            <meshBasicMaterial color={body.ring.color} transparent opacity={0.55} side={THREE.DoubleSide} />
-          </mesh>
+          <group rotation={[SATURN_RING_TILT, 0, 0]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[ringInner, ringMid, 64]} />
+              <meshBasicMaterial color={body.ring.color} transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[ringMid + 0.08, ringOuter, 64]} />
+              <meshBasicMaterial color={body.ring.color} transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
+            </mesh>
+          </group>
         )}
+
+        <group ref={spinRef} scale={oblate}>
+          <mesh {...pickHandlers}>
+            <sphereGeometry args={[r, 32, 32]} />
+            <meshStandardMaterial
+              color={body.color}
+              emissive={body.emissive ?? "#000000"}
+              emissiveIntensity={body.emissive ? 0.5 : 0}
+              roughness={body.name === "Jupiter" || body.name === "Saturn" ? 0.75 : 0.85}
+              metalness={body.name === "Mercury" || body.name === "Venus" ? 0.12 : 0.05}
+            />
+          </mesh>
+
+          {body.name === "Earth" && (
+            <mesh scale={[1.03, 1.03, 1.03]}>
+              <sphereGeometry args={[r, 24, 24]} />
+              <meshBasicMaterial color="#6eb5ff" transparent opacity={0.14} depthWrite={false} />
+            </mesh>
+          )}
+
+          {(body.name === "Jupiter" || body.name === "Saturn") && (
+            <mesh scale={[1.001, 1.001, 1.001]}>
+              <sphereGeometry args={[r, 32, 32]} />
+              <meshStandardMaterial
+                color={body.name === "Jupiter" ? "#c49560" : "#d4bc8a"}
+                transparent
+                opacity={0.18}
+                roughness={1}
+                depthWrite={false}
+              />
+            </mesh>
+          )}
+        </group>
 
         {showLabel && (
           <Html position={[0, r + 0.7, 0]} center distanceFactor={50} className="ss-label">
@@ -670,6 +715,8 @@ const ExoPlanetBody = ({
     ref.current.position.set(Math.cos(ang) * localR, Math.sin(ang) * localR * 0.12, Math.sin(ang) * localR);
   });
 
+  const isHabitable = exo.radiusEarth >= 0.8 && exo.radiusEarth <= 1.6 && exo.aAU >= 0.03 && exo.aAU <= 0.7;
+
   if (!show) return null;
   return (
     <group>
@@ -679,10 +726,23 @@ const ExoPlanetBody = ({
           onClick={(e) => { e.stopPropagation(); onFocus(exo.name); }}
           onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
           onPointerOut={() => { document.body.style.cursor = "auto"; }}
+          scale={exo.radiusEarth > 6 ? [1, 0.94, 1] : [1, 1, 1]}
         >
           <sphereGeometry args={[r, 28, 28]} />
-          <meshStandardMaterial color={exo.color} emissive={exo.color} emissiveIntensity={0.25} roughness={0.85} />
+          <meshStandardMaterial
+            color={exo.color}
+            emissive={isHabitable ? "#3a6a4a" : exo.color}
+            emissiveIntensity={isHabitable ? 0.35 : 0.2}
+            roughness={exo.radiusEarth > 6 ? 0.7 : 0.88}
+            metalness={exo.radiusEarth > 6 ? 0.08 : 0.02}
+          />
         </mesh>
+        {isHabitable && (
+          <mesh scale={[1.06, 1.06, 1.06]}>
+            <sphereGeometry args={[r, 20, 20]} />
+            <meshBasicMaterial color="#7ec8e8" transparent opacity={0.12} depthWrite={false} />
+          </mesh>
+        )}
         <Html position={[0, r + 0.9, 0]} center distanceFactor={26} className="ss-label">
           <button onClick={() => onFocus(exo.name)} className="ss-name ss-moon" style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             {exo.name}
@@ -706,27 +766,27 @@ const circlePoints = (radius: number, seg: number): [number, number, number][] =
 const SunSpacecraft = ({ craft, onFocus }: { craft: Spacecraft; onFocus: (name: string) => void }) => {
   const p = useMemo(
     () => new THREE.Vector3(...(craft.dir ?? [1, 0, 0])).normalize().multiplyScalar(scaleDistanceAU(craft.distanceAU ?? 1)),
-    []
+    [craft.dir, craft.distanceAU],
   );
+  const modelScale = craft.kind.includes("telescope") ? 1.8 : 1.2;
   return (
     <group>
       <Line points={[[0, 0, 0], p.toArray()]} color={craft.color} lineWidth={1} transparent opacity={0.1} />
       <group position={p.toArray()}>
-        <mesh
+        <group
           onClick={(e) => { e.stopPropagation(); onFocus(craft.name); }}
           onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
           onPointerOut={() => { document.body.style.cursor = "auto"; }}
         >
-          <octahedronGeometry args={[1.3, 0]} />
-          <meshStandardMaterial color={craft.color} emissive={craft.color} emissiveIntensity={0.4} metalness={0.6} roughness={0.4} />
-        </mesh>
+          <SpacecraftModel craft={craft} scale={modelScale} slowSpin />
+        </group>
         <mesh>
-          <sphereGeometry args={[2.6, 12, 12]} />
-          <meshBasicMaterial color={craft.color} transparent opacity={0.14} depthWrite={false} />
+          <sphereGeometry args={[modelScale * 2.2, 12, 12]} />
+          <meshBasicMaterial color={craft.color} transparent opacity={0.1} depthWrite={false} />
         </mesh>
-        <Html position={[0, 3.4, 0]} center distanceFactor={90} className="ss-label">
+        <Html position={[0, modelScale * 3.2, 0]} center distanceFactor={90} className="ss-label">
           <button onClick={() => onFocus(craft.name)} className="ss-name" style={{ color: craft.color, pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
-            {craft.name}
+            {craft.name === "James Webb Space Telescope" ? "Webb" : craft.name}
           </button>
         </Html>
       </group>
@@ -758,6 +818,7 @@ const EarthSatellites = ({
       const localR = earthSize * 1.18 + 0.25 + i * 0.35;
       const ang = clock.current.years * (60 + i * 40); // fast LEO, but calm at 0.1x
       g.position.set(ex + Math.cos(ang) * localR, ey + Math.sin(ang) * localR * 0.3, ez + Math.sin(ang) * localR);
+      g.rotation.y = clock.current.years * (0.5 + i * 0.3);
     });
   });
 
@@ -766,15 +827,14 @@ const EarthSatellites = ({
     <>
       {list.map((s, i) => (
         <group key={s.name} ref={(el) => (refs.current[i] = el)}>
-          <mesh
+          <group
             onClick={(e) => { e.stopPropagation(); onFocus(s.name); }}
             onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
             onPointerOut={() => { document.body.style.cursor = "auto"; }}
           >
-            <boxGeometry args={[0.5, 0.14, 0.14]} />
-            <meshStandardMaterial color={s.color} emissive={s.color} emissiveIntensity={0.3} metalness={0.5} roughness={0.5} />
-          </mesh>
-          <Html position={[0, 0.4, 0]} center distanceFactor={22} className="ss-label">
+            <SpacecraftModel craft={s} scale={s.kind.includes("telescope") ? 0.55 : 0.5} />
+          </group>
+          <Html position={[0, 0.75, 0]} center distanceFactor={22} className="ss-label">
             <button onClick={() => onFocus(s.name)} className="ss-name ss-moon" style={{ pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
               {s.name === "International Space Station" ? "ISS" : "Hubble"}
             </button>
