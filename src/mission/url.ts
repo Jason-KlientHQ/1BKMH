@@ -62,6 +62,12 @@ export interface AppUrlState {
   bday?: string;
   useLeap?: boolean;
   mission: MissionState;
+  /** When true, shared links auto-start the cinematic flight on load. */
+  fly?: boolean;
+}
+
+export function parseFlyParam(value: string | null): boolean {
+  return value === "1" || value === "true";
 }
 
 export function buildAppShareQuery(state: AppUrlState): string {
@@ -85,6 +91,7 @@ export function buildAppShareQuery(state: AppUrlState): string {
   if (v.ispSeconds !== DEFAULT_VESSEL.ispSeconds) parts.push(`isp=${v.ispSeconds}`);
   if (v.thrustN !== DEFAULT_VESSEL.thrustN) parts.push(`thrust=${v.thrustN}`);
   if (v.sailAreaM2 !== DEFAULT_VESSEL.sailAreaM2) parts.push(`sail=${v.sailAreaM2}`);
+  if (state.fly) parts.push("fly=1");
 
   return parts.length ? `?${parts.join("&")}` : "";
 }
@@ -93,10 +100,12 @@ export function parseAppUrl(params: URLSearchParams): {
   bday: string | null;
   leap: boolean;
   mission: MissionState;
+  fly: boolean;
 } {
   return {
     bday: parseBirthdayParam(params.get("b")),
     leap: parseLeapParam(params.get("leap")),
     mission: parseMissionParams(params),
+    fly: parseFlyParam(params.get("fly")),
   };
 }

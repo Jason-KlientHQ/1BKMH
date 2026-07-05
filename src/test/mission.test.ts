@@ -42,6 +42,20 @@ describe("mission URL", () => {
     });
     expect(q).toBe("");
   });
+
+  it("includes fly=1 when sharing an in-flight mission", () => {
+    const q = buildAppShareQuery({
+      mission: {
+        origin: "sun",
+        destination: "Sirius",
+        mode: "light_speed",
+        vessel: { ...DEFAULT_VESSEL },
+      },
+      fly: true,
+    });
+    expect(q).toContain("fly=1");
+    expect(q).toContain("dest=Sirius");
+  });
 });
 
 describe("mission preview", () => {

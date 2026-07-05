@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Compass, Navigation, Rocket, X } from "lucide-react";
+import { ModeComparison } from "@/components/ModeComparison";
 import { computeMission } from "@/mission/preview";
 import { findNavStar, searchNavStars } from "@/mission/stars";
 import {
@@ -254,6 +255,16 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
                 />
                 <span className="font-mono-num tnum text-xs text-beam">×{mission.vessel.warpFactor.toFixed(1)}</span>
               </Field>
+            )}
+
+            {destStar && (
+              <ModeComparison
+                dest={destStar}
+                vessel={mission.vessel}
+                origin={mission.origin}
+                activeMode={mission.mode}
+                onSelectMode={setMode}
+              />
             )}
 
             {/* Route summary */}

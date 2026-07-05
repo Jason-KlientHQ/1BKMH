@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
 import * as THREE from "three";
@@ -46,6 +46,7 @@ export const MissionFlight = ({
     <>
       <Line points={linePoints} color="#2fe0c0" lineWidth={2.5} transparent opacity={0.65} depthWrite={false} />
       <Line points={linePoints} color="#ffd166" lineWidth={1} transparent opacity={0.2} depthWrite={false} />
+      <VesselTrail path={path} tripProgress={tripProgress} missionFlying={missionFlying} destination={destination} />
       <VesselMarker position={vesselPos} />
       <MissionChaseCamera
         path={path}
@@ -54,6 +55,57 @@ export const MissionFlight = ({
         controlsRef={controlsRef}
       />
     </>
+  );
+};
+
+const TRAIL_LEN = 48;
+const TRAIL_MIN_STEP = 0.8;
+
+const VesselTrail = ({
+  path,
+  tripProgress,
+  missionFlying,
+  destination,
+}: {
+  path: NonNullable<ReturnType<typeof buildMissionPath>>;
+  tripProgress: number;
+  missionFlying: boolean;
+  destination: string | null;
+}) => {
+  const [trailPoints, setTrailPoints] = useState<[number, number, number][]>([]);
+  const trailRef = useRef<[number, number, number][]>([]);
+  const lastT = useRef(-1);
+
+  useEffect(() => {
+    trailRef.current = [];
+    lastT.current = -1;
+    setTrailPoints([]);
+  }, [destination]);
+
+  useFrame(() => {
+    if (tripProgress === lastT.current) return;
+    const pos = interpolatePath(path, tripProgress);
+    const trail = trailRef.current;
+    const prev = trail[0];
+    if (!prev || Math.hypot(pos[0] - prev[0], pos[1] - prev[1], pos[2] - prev[2]) >= TRAIL_MIN_STEP) {
+      trail.unshift(pos);
+      if (trail.length > TRAIL_LEN) trail.length = TRAIL_LEN;
+      setTrailPoints([...trail]);
+    }
+    lastT.current = tripProgress;
+  });
+
+  if (trailPoints.length < 2) return null;
+
+  return (
+    <Line
+      points={trailPoints}
+      color="#ffd166"
+      lineWidth={1.5}
+      transparent
+      opacity={0.45}
+      depthWrite={false}
+    />
   );
 };
 

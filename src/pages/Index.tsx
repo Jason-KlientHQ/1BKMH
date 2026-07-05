@@ -34,18 +34,20 @@ const Index = () => {
   const [plannerOpen, setPlannerOpen] = useState(
     () => typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("dest"),
   );
-  const [mission, setMission] = useState<MissionState>(() =>
-    typeof window !== "undefined"
-      ? parseAppUrl(new URLSearchParams(window.location.search)).mission
-      : { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
+  const initialUrl =
+    typeof window !== "undefined" ? parseAppUrl(new URLSearchParams(window.location.search)) : null;
+  const [mission, setMission] = useState<MissionState>(
+    () => initialUrl?.mission ?? { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
   );
+  const [flyInUrl, setFlyInUrl] = useState(() => initialUrl?.fly ?? false);
   const { muted, toggle } = useAmbient();
   const systemRef = useRef<SolarSystemHandle>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const hasJourney = useRef(false);
+  const autoFlyPending = useRef(initialUrl?.fly ?? false);
 
-  const syncUrl = (birth?: string, leap?: boolean) => {
+  const syncUrl = (birth?: string, leap?: boolean, fly?: boolean) => {
     try {
       window.history.replaceState(
         null,
@@ -54,6 +56,7 @@ const Index = () => {
           bday: birth ?? (bday || undefined),
           useLeap: leap ?? useLeap,
           mission,
+          fly: fly ?? flyInUrl,
         }),
       );
     } catch {
@@ -106,7 +109,7 @@ const Index = () => {
   useEffect(() => {
     if (!hasJourney.current && !mission.destination) return;
     syncUrl();
-  }, [mission]);
+  }, [mission, flyInUrl]);
 
   // Recompute stats when leap-year preference changes after a journey exists.
   useEffect(() => {
@@ -265,6 +268,12 @@ const Index = () => {
         onMissionChange={setMission}
         plannerOpen={plannerOpen}
         onPlannerToggle={() => setPlannerOpen((v) => !v)}
+        autoFlyPending={autoFlyPending}
+        onFlyUrlChange={(fly) => {
+          setFlyInUrl(fly);
+          syncUrl(undefined, undefined, fly);
+        }}
+        onPlannerOpen={() => setPlannerOpen(true)}
       />
 
       {/* ============================ RESULTS ============================ */}
@@ -303,6 +312,9 @@ const SolarSystemSection = ({
   onMissionChange,
   plannerOpen,
   onPlannerToggle,
+  autoFlyPending,
+  onFlyUrlChange,
+  onPlannerOpen,
 }: {
   sectionRef: React.RefObject<HTMLDivElement>;
   systemRef: React.RefObject<SolarSystemHandle>;
@@ -318,6 +330,9 @@ const SolarSystemSection = ({
   onMissionChange: (m: MissionState) => void;
   plannerOpen: boolean;
   onPlannerToggle: () => void;
+  autoFlyPending: React.MutableRefObject<boolean>;
+  onFlyUrlChange: (fly: boolean) => void;
+  onPlannerOpen: () => void;
 }) => {
   const [tripProgress, setTripProgress] = useState(0);
   const [missionFlying, setMissionFlying] = useState(false);
@@ -335,6 +350,7 @@ const SolarSystemSection = ({
     setMissionFlying(false);
     flightStart.current = null;
     if (flightRaf.current) cancelAnimationFrame(flightRaf.current);
+    onFlyUrlChange(false);
   };
 
   const startFlight = (reset = false) => {
@@ -347,8 +363,17 @@ const SolarSystemSection = ({
     }
     setMissionFlying(true);
     flightStart.current = null;
+    onFlyUrlChange(true);
     systemRef.current?.focusDestination(mission.destination);
   };
+
+  // Shared links with fly=1 auto-start the cinematic route once mission is ready.
+  useEffect(() => {
+    if (!autoFlyPending.current || !mission.destination || !missionResult) return;
+    autoFlyPending.current = false;
+    const t = window.setTimeout(() => startFlight(true), 900);
+    return () => window.clearTimeout(t);
+  }, [mission.destination, missionResult]);
 
   useEffect(() => {
     if (!missionFlying) return;
@@ -363,6 +388,7 @@ const SolarSystemSection = ({
       } else {
         setMissionFlying(false);
         flightStart.current = null;
+        onFlyUrlChange(false);
       }
     };
 
@@ -404,6 +430,10 @@ const SolarSystemSection = ({
           onDestinationSelect={(name) =>
             onMissionChange({ ...mission, destination: name })
           }
+          onSetMissionDestination={(name) => {
+            onMissionChange({ ...mission, destination: name });
+            onPlannerOpen();
+          }}
         />
       </ErrorBoundary>
 

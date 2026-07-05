@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { X, Maximize2, Minimize2, Radio, Compass } from "lucide-react";
+import { X, Maximize2, Minimize2, Radio, Compass, Navigation } from "lucide-react";
 import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
 import { eventForYear } from "@/data/worldEvents";
 import {
@@ -1381,6 +1381,7 @@ interface SolarSystemProps {
   birthDate?: string;
   destination?: string | null;
   onDestinationSelect?: (name: string) => void;
+  onSetMissionDestination?: (name: string) => void;
   missionResult?: MissionResult | null;
   tripProgress?: number;
   missionFlying?: boolean;
@@ -1395,6 +1396,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       birthDate = "",
       destination = null,
       onDestinationSelect,
+      onSetMissionDestination,
       missionResult = null,
       tripProgress = 0,
       missionFlying = false,
@@ -1700,6 +1702,16 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                 </div>
               ))}
             </div>
+            {isNavStar(detail.name) && onSetMissionDestination && (
+              <button
+                type="button"
+                onClick={() => onSetMissionDestination(detail.name)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-beam/30 bg-beam/[0.08] py-2 text-xs font-semibold text-beam transition-colors hover:bg-beam/[0.14]"
+              >
+                <Navigation className="h-3.5 w-3.5" strokeWidth={2} />
+                Set as mission destination
+              </button>
+            )}
             <div className="mt-3 flex items-center gap-3 border-t border-white/5 pt-3 text-[11px]">
               <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60">More</span>
               <a href={detail.links.grokipedia} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">Grokipedia ↗</a>

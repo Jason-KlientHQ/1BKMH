@@ -84,12 +84,31 @@ beyond it:                    linear in light-years (stars stay proportional)`}<
               relative ORDER; absolute proportions are compressed on purpose.
             </Section>
 
+            <Section title="## Star Navigator & propulsion (mission planner)">
+              The navigator estimates trip time from the Sun (or Earth) to any of ~380 catalog
+              stars. Each mode uses a different physics model — wonder over precision for
+              speculative drives:
+              <Code>{`light_speed     → 1 ly per year at c (physical upper bound)
+sublight        → constant fraction of c (hypothetical, no accel model)
+alcubierre      → effective speed = c × warp factor (speculative)
+nuclear         → Tsiolkovsky: Δv = Isp·g₀·ln(m₀/m₁), then ballistic coast
+solar_sail      → F = 2P/c × area at 1 AU, numerical integration to target
+gravity_assist  → Jupiter (+9.2 km/s) + Saturn (+4.8 km/s) flybys,
+                  plus 60% of onboard fuel for a departure burn`}</Code>
+              The cinematic flight visualiser maps mission legs to 3D waypoints along a
+              piecewise path; gravity-assist legs snap to planet positions at the current
+              sim clock. ETA remaining in the HUD scales with mission ETA × trip progress
+              (0–100%). Share links encode <C>dest</C>, <C>mode</C>, vessel params, and{" "}
+              <C>fly=1</C> to auto-start the route animation on load.
+            </Section>
+
             <Section title="## Assumptions & simplifications">
               <ul className="ml-4 list-disc space-y-1">
                 <li>Moon cadence is slowed to a calm, watchable rate (wonder over exact periods).</li>
                 <li>Belts rotate as a group rather than each rock on its own orbit.</li>
                 <li>Star & body sizes are exaggerated for visibility; distances are compressed.</li>
-                <li>Light travels in a straight line at c; gravity/relativity are ignored.</li>
+                <li>Light travels in a straight line at c; gravity/relativity are ignored for the birthday beam.</li>
+                <li>Mission routes are straight-line heliocentric estimates — no full n-body astrodynamics.</li>
                 <li>Leap years optional (365.25 vs 365 days/yr toggle).</li>
               </ul>
             </Section>
