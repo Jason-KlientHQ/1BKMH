@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const SRC = "/ambient.mp3";
+const SRC = "/ambient.m4a";
 const LEVEL = 0.55;
 
 /**
@@ -33,7 +33,7 @@ export function useAmbient() {
     if (!audioRef.current) {
       const a = new Audio(SRC);
       a.loop = true;
-      a.preload = "auto";
+      a.preload = "none";
       a.volume = 0;
       audioRef.current = a;
     }

@@ -8,19 +8,20 @@ import { grokipediaUrl } from "@/data/bodyInfo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useReveal } from "@/hooks/useReveal";
 import { useAmbient } from "@/hooks/useAmbient";
-import { SECONDS_PER_ORBIT } from "@/lib/constants";
-
-interface Result {
-  years: number;
-  orbitsPerYear: number;
-  totalOrbits: number;
-  lightYears: number;
-}
+import {
+  buildShareQuery,
+  computeLightJourney,
+  nextStar,
+  parseBirthdayParam,
+  parseLeapParam,
+  starsReached,
+  type LightJourneyResult,
+} from "@/lib/lightJourney";
 
 const Index = () => {
   const [bday, setBday] = useState("");
   const [useLeap, setUseLeap] = useState(true);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<LightJourneyResult | null>(null);
   const [error, setError] = useState("");
   const [liveLy, setLiveLy] = useState<number | null>(null);
   const [readmeOpen, setReadmeOpen] = useState(false);
@@ -29,57 +30,58 @@ const Index = () => {
   const systemRef = useRef<SolarSystemHandle>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const hasJourney = useRef(false);
 
-  const compute = (birthStr: string, leap: boolean): Result | null => {
-    if (!birthStr) return null;
-    const birth = new Date(birthStr);
-    const now = new Date();
-    if (birth > now) return null;
-    const ageSeconds = (now.getTime() - birth.getTime()) / 1000;
-    const daysPerYear = leap ? 365.25 : 365;
-    const secPerYear = daysPerYear * 86400;
-    const years = ageSeconds / secPerYear;
-    const orbitsPerYear = secPerYear / SECONDS_PER_ORBIT;
-    const totalOrbits = ageSeconds / SECONDS_PER_ORBIT;
-    return { years, orbitsPerYear, totalOrbits, lightYears: years };
+  const applyJourney = (birth: string, leap: boolean, scroll = false) => {
+    const r = computeLightJourney(birth, leap);
+    if (!r) {
+      setError("Your birthday has to be in the past.");
+      setResult(null);
+      return false;
+    }
+    setError("");
+    setResult(r);
+    hasJourney.current = true;
+    try {
+      window.history.replaceState(null, "", buildShareQuery(birth, leap));
+    } catch {
+      /* ignore */
+    }
+    if (scroll) {
+      requestAnimationFrame(() =>
+        systemSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+    }
+    return true;
   };
 
-  const calculate = () => {
+  const calculate = (scroll = true) => {
     if (!bday) {
       setError("Pick your birthday to begin.");
       return;
     }
-    const r = compute(bday, useLeap);
-    if (!r) {
-      setError("Your birthday has to be in the past.");
-      return;
-    }
-    setError("");
-    setResult(r);
-    // Deep-link: encode the birthday so the journey is shareable / restorable.
-    try { window.history.replaceState(null, "", `?b=${bday}`); } catch { /* ignore */ }
-    // Fly to the unified scene; SolarSystem auto-frames + expands the light when
-    // the new lightYears lands (see its effect on lightYears).
-    requestAnimationFrame(() =>
-      systemSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    );
+    applyJourney(bday, useLeap, scroll);
   };
 
-  // On load: restore a shared birthday from the URL, and show a first-visit hint.
+  // On load: restore a shared birthday (and leap preference) from the URL.
   useEffect(() => {
-    const b = new URLSearchParams(window.location.search).get("b");
-    if (b && /^\d{4}-\d{2}-\d{2}$/.test(b)) {
+    const params = new URLSearchParams(window.location.search);
+    const b = parseBirthdayParam(params.get("b"));
+    if (b) {
+      const leap = parseLeapParam(params.get("leap"));
       setBday(b);
-      const r = compute(b, true);
-      if (r) {
-        setResult(r);
-        requestAnimationFrame(() => systemSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-      }
+      setUseLeap(leap);
+      applyJourney(b, leap, true);
     } else if (!localStorage.getItem("blj_seen")) {
       setShowHint(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recompute stats when leap-year preference changes after a journey exists.
+  useEffect(() => {
+    if (!hasJourney.current || !bday) return;
+    applyJourney(bday, useLeap, false);
+  }, [useLeap]);
 
   const dismissHint = () => { setShowHint(false); try { localStorage.setItem("blj_seen", "1"); } catch { /* ignore */ } };
 
@@ -87,14 +89,14 @@ const Index = () => {
   useEffect(() => {
     if (!result) return;
     const id = setInterval(() => {
-      const r = compute(bday, useLeap);
+      const r = computeLightJourney(bday, useLeap);
       if (r) setLiveLy(r.lightYears);
     }, 1000);
     return () => clearInterval(id);
   }, [result, bday, useLeap]);
 
-  const reachedStars = result ? STARS.filter((s) => s.distance <= result.lightYears) : [];
-  const nextStar = result ? STARS.find((s) => s.distance > result.lightYears) : undefined;
+  const reachedStars = result ? starsReached(STARS, result.lightYears) : [];
+  const nextTarget = result ? nextStar(STARS, result.lightYears) : undefined;
 
   return (
     <main className="relative overflow-x-hidden">
@@ -223,7 +225,9 @@ const Index = () => {
         lightYears={result?.lightYears ?? 0}
         bday={bday}
         setBday={setBday}
-        calculate={calculate}
+        calculate={() => calculate(false)}
+        useLeap={useLeap}
+        setUseLeap={setUseLeap}
         error={error}
         onReadme={() => setReadmeOpen(true)}
       />
@@ -236,7 +240,7 @@ const Index = () => {
         >
           <Stats result={result} liveLy={liveLy} />
 
-          <ReachPanel reachedStars={reachedStars} nextStar={nextStar} result={result} />
+          <ReachPanel reachedStars={reachedStars} nextStar={nextTarget} result={result} />
         </section>
       )}
 
@@ -256,6 +260,8 @@ const SolarSystemSection = ({
   bday,
   setBday,
   calculate,
+  useLeap,
+  setUseLeap,
   error,
   onReadme,
 }: {
@@ -265,6 +271,8 @@ const SolarSystemSection = ({
   bday: string;
   setBday: (v: string) => void;
   calculate: () => void;
+  useLeap: boolean;
+  setUseLeap: (v: boolean) => void;
   error: string;
   onReadme: () => void;
 }) => {
@@ -309,6 +317,15 @@ const SolarSystemSection = ({
               {lightYears > 0 ? "Update" : "See my Light"}
             </button>
           </div>
+          <label className="pointer-events-auto flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={useLeap}
+              onChange={(e) => setUseLeap(e.target.checked)}
+              className="h-3.5 w-3.5 cursor-pointer rounded border-white/20 bg-background/60 accent-primary [color-scheme:dark]"
+            />
+            Leap years (365.25 days)
+          </label>
           {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
           <button
             onClick={onReadme}
@@ -332,7 +349,7 @@ const SolarSystemSection = ({
 };
 
 /* --------------------------------- Stats -------------------------------- */
-const Stats = ({ result, liveLy }: { result: Result; liveLy: number | null }) => {
+const Stats = ({ result, liveLy }: { result: LightJourneyResult; liveLy: number | null }) => {
   const { ref, className } = useReveal<HTMLDivElement>();
   const stats = [
     { label: "Your age", value: result.years.toFixed(1), unit: "years old" },
@@ -402,7 +419,7 @@ const ReachPanel = ({
 }: {
   reachedStars: typeof STARS;
   nextStar: (typeof STARS)[number] | undefined;
-  result: Result;
+  result: LightJourneyResult;
 }) => {
   const { ref, className } = useReveal<HTMLDivElement>();
   return (

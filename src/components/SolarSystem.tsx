@@ -1,4 +1,5 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { OrbitControls, Html, Line, Stars } from "@react-three/drei";
 import {
   forwardRef,
@@ -168,8 +169,8 @@ const StarSurface = ({
   color: string;
   size: number;
   segments?: number;
-  onClick?: (e: any) => void;
-  onPointerOver?: (e: any) => void;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+  onPointerOver?: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut?: () => void;
 }) => {
   const matRef = useRef<THREE.ShaderMaterial>(null);
@@ -209,7 +210,10 @@ const TimeKeeper = ({
   clock: React.MutableRefObject<SimClock>;
   onZoom: (near: boolean) => void;
 }) => {
-  const { camera, controls } = useThree() as { camera: THREE.PerspectiveCamera; controls: any };
+  const { camera, controls } = useThree() as {
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControlsImpl | null;
+  };
   const nearRef = useRef(false);
   useFrame((_, delta) => {
     const c = clock.current;
@@ -1042,7 +1046,7 @@ const CameraDirector = ({
   goal: { name: string; token: number } | null;
   reach: number;
   clock: React.MutableRefObject<SimClock>;
-  controlsRef: React.MutableRefObject<any>;
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
 }) => {
   const { camera } = useThree();
   const st = useRef({
@@ -1112,7 +1116,7 @@ const FlythroughCamera = ({
 }: {
   active: boolean;
   radius: number;
-  controlsRef: React.MutableRefObject<any>;
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
 }) => {
   const { camera } = useThree();
   const angle = useRef(0);
@@ -1255,7 +1259,7 @@ const Scene = ({
   animatingLight: boolean;
   setAnimatingLight: (v: boolean) => void;
   flying: boolean;
-  controlsRef: React.MutableRefObject<any>;
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
   goal: { name: string; token: number } | null;
   onFocus: (name: string) => void;
   focusName: string | null;
@@ -1339,7 +1343,7 @@ interface SolarSystemProps {
 export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
   ({ lightYears = 0, birthDate = "" }, ref) => {
     const clock = useRef<SimClock>({ years: EPOCH_OFFSET, speed: 0.1, paused: false, camDist: 80 });
-    const controlsRef = useRef<any>(null);
+    const controlsRef = useRef<OrbitControlsImpl | null>(null);
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const camRef = useRef<THREE.Camera | null>(null);
@@ -1408,7 +1412,6 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
         focus("__light__");
         setAnimatingLight(true);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lightYears]);
 
     const exportPNG = () => {
