@@ -2,17 +2,7 @@ import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER
 import { STAR_CATALOG } from "@/data/starCatalog";
 
 import { SEC_PER_AU, SEC_PER_LY } from "@/lib/constants"; // derived from c = 1,079,252,848.8 km/h
-
-// Stellar masses (M☉) for the featured stars — measured values.
-const STAR_MASS: Record<string, number> = {
-  "Proxima Centauri": 0.12, "Alpha Centauri": 1.1, "Barnard's Star": 0.16, "Wolf 359": 0.09,
-  "Lalande 21185": 0.39, Sirius: 2.06, "Luyten 726-8": 0.1, "Ross 154": 0.17, "Ross 248": 0.14,
-  "Epsilon Eridani": 0.82, "Lacaille 9352": 0.48, "Ross 128": 0.17, "61 Cygni": 0.7, Procyon: 1.5,
-  "Tau Ceti": 0.78, "Luyten's Star": 0.29, "Teegarden's Star": 0.09, "Kapteyn's Star": 0.28,
-  "Wolf 1061": 0.29, "Gliese 876": 0.37, "40 Eridani": 0.78, Altair: 1.79, "Gliese 581": 0.31,
-  Vega: 2.14, Fomalhaut: 1.92, Pollux: 1.91, Arcturus: 1.08, "Zeta Reticuli": 0.99, Capella: 2.57,
-  Aldebaran: 1.16,
-};
+import { resolveMassSolar } from "@/stellar/physics";
 
 /* ----------------------------- source links ------------------------------ */
 // Sources: Grokipedia (primary) → NASA. Wikipedia is not used.
@@ -151,7 +141,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
 
   const s = NEARBY_STARS.find((b) => b.name === name);
   if (s) {
-    const mass = STAR_MASS[name];
+    const mass = resolveMassSolar(name, s.radiusSolar, s.spectral);
     return {
       name,
       type: s.spectral,
@@ -159,7 +149,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
       stats: [
         { label: "Distance", value: `${s.distance} ly` },
         { label: "Radius", value: `${s.radiusSolar.toFixed(2)} R☉` },
-        mass ? { label: "Mass", value: `${mass.toFixed(2)} M☉` } : { label: "Light-time", value: `${s.distance.toFixed(1)} yr` },
+        { label: "Mass", value: `${mass.toFixed(2)} M☉` },
       ],
       lightSeconds: s.distance * SEC_PER_LY,
       links,
@@ -253,6 +243,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
   const cat = STAR_CATALOG.find((b) => b.name === name);
   if (cat) {
     const isGiant = cat.r >= 10;
+    const mass = resolveMassSolar(cat.name, cat.r, cat.spect);
     const kind = /^(HD|HIP|Gliese)/.test(cat.name) ? "Catalog star" : "Star";
     const sizeNote = cat.r >= 100 ? " (supergiant)" : cat.r >= 10 ? " (giant)" : "";
     return {
@@ -262,7 +253,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
       stats: [
         { label: "Distance", value: `${cat.ly} ly` },
         { label: "Radius", value: `~${cat.r.toLocaleString("en-US")} R☉` },
-        { label: "Magnitude", value: cat.mag.toFixed(1) },
+        { label: "Mass", value: `~${mass.toFixed(2)} M☉` },
       ],
       lightSeconds: cat.ly * SEC_PER_LY,
       links,

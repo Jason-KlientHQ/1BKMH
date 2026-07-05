@@ -45,6 +45,13 @@ import {
   type ExoticObject,
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
+import { starScenePosition } from "@/astrometry/positions";
+import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
+import { stellarFrameDistance } from "@/stellar/render";
+import { isNavStar } from "@/mission/stars";
+import { MissionRoute } from "@/components/MissionRoute";
+import { MissionFlight } from "@/components/MissionFlight";
+import type { MissionResult, PropulsionMode } from "@/mission/types";
 
 interface SimClock {
   years: number;
@@ -63,15 +70,10 @@ const MAX_ZOOM = 30_000; // covers the largest light sphere + the nearest stars
 const frameDistanceFor = (reach: number) =>
   Math.min((reach / Math.sin(HALF_FOV)) * 1.15, MAX_ZOOM * 0.95);
 
-// Exaggerated render radius for a star. Cube-root compression so giants
-// (Arcturus 25 R☉, Betelgeuse ~270 R☉) read as gigantic without dwarfing the scene.
-const starRenderSize = (s: StarPOI) => 10 + 7 * Math.cbrt(s.radiusSolar);
-const catalogSize = (r: number) => 7 + 7 * Math.cbrt(Math.max(r, 0.05));
-
 // Live scene position of any focusable body (Sun / planet / star), so the
 // camera can fly to it and keep tracking it as it orbits.
 const starScenePos = (s: StarPOI): THREE.Vector3 =>
-  new THREE.Vector3(...s.dir).normalize().multiplyScalar(scaleDistanceAU(s.distance * AU_PER_LY));
+  new THREE.Vector3(...starScenePosition(s.distance, s.dir));
 
 const bodyScenePos = (name: string, years: number): THREE.Vector3 => {
   if (name === "__light__" || name === "Sun") return new THREE.Vector3(0, 0, 0);
@@ -99,7 +101,7 @@ const bodyScenePos = (name: string, years: number): THREE.Vector3 => {
     if (host) return starScenePos(host);
   }
   const cat = STAR_CATALOG.find((b) => b.name === name);
-  if (cat) return new THREE.Vector3(...cat.pos).normalize().multiplyScalar(scaleDistanceAU(cat.ly * AU_PER_LY));
+  if (cat) return new THREE.Vector3(...starScenePosition(cat.ly, cat.pos));
   const sc = SPACECRAFT.find((b) => b.name === name);
   if (sc) {
     if (sc.orbit === "earth") {
@@ -123,10 +125,10 @@ const bodyFrameDist = (name: string, reach: number): number => {
   if (COMETS.some((b) => b.name === name)) return 7;
   if (name === ROADSTER.name) return 6;
   const s = NEARBY_STARS.find((b) => b.name === name);
-  if (s) return Math.max(starRenderSize(s) * 3.5, 40);
+  if (s) return stellarFrameDistance(featuredStarRender(s).size, true);
   if (BLACK_HOLES.some((b) => b.name === name)) return 120;
   const catStar = STAR_CATALOG.find((b) => b.name === name);
-  if (catStar) return Math.max(catalogSize(catStar.r) * 3.2, 40);
+  if (catStar) return stellarFrameDistance(catalogStarRender(catStar).size);
   if (SPACECRAFT.some((b) => b.name === name)) return 6;
   if (EXOTIC_OBJECTS.some((b) => b.name === name)) return 90;
   return 80;
@@ -866,9 +868,9 @@ const CatalogStars = ({ onFocus }: { onFocus: (name: string) => void }) => {
     const m = new THREE.Matrix4();
     const col = new THREE.Color();
     list.forEach((s, i) => {
-      const dir = new THREE.Vector3(...s.pos).normalize();
-      const p = dir.multiplyScalar(scaleDistanceAU(s.ly * AU_PER_LY));
-      const size = catalogSize(s.r) + Math.max(0, 3 - s.mag) * 0.8;
+      const [px, py, pz] = starScenePosition(s.ly, s.pos);
+      const p = new THREE.Vector3(px, py, pz);
+      const size = catalogStarRender(s).size;
       m.makeScale(size, size, size);
       m.setPosition(p.x, p.y, p.z);
       mesh.setMatrixAt(i, m);
@@ -880,7 +882,7 @@ const CatalogStars = ({ onFocus }: { onFocus: (name: string) => void }) => {
 
   const hoverStar = hover >= 0 ? list[hover] : null;
   const hoverPos = useMemo(
-    () => (hoverStar ? new THREE.Vector3(...hoverStar.pos).normalize().multiplyScalar(scaleDistanceAU(hoverStar.ly * AU_PER_LY)) : null),
+    () => (hoverStar ? new THREE.Vector3(...starScenePosition(hoverStar.ly, hoverStar.pos)) : null),
     [hover] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -912,26 +914,29 @@ const NearbyStars = ({
   clock,
   showMinor,
   focusName,
+  destinationName,
 }: {
   lightYears: number;
   onFocus: (name: string) => void;
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
   focusName: string | null;
+  destinationName: string | null;
 }) => {
   const placed = useMemo(
     () =>
       NEARBY_STARS.map((s) => {
-        const dir = new THREE.Vector3(...s.dir).normalize();
-        const r = scaleDistanceAU(s.distance * AU_PER_LY);
-        return { star: s, p: dir.multiplyScalar(r), size: starRenderSize(s) };
+        const [px, py, pz] = starScenePosition(s.distance, s.dir);
+        const render = featuredStarRender(s);
+        return { star: s, p: new THREE.Vector3(px, py, pz), size: render.size, glow: render.glow };
       }),
     []
   );
   return (
     <group>
-      {placed.map(({ star, p, size }) => {
+      {placed.map(({ star, p, size, glow }) => {
         const reached = star.distance <= lightYears;
+        const isDest = destinationName === star.name;
         return (
           <group key={star.name} position={p.toArray()}>
             {/* animated plasma photosphere (unlit — stars emit their own light) */}
@@ -946,13 +951,19 @@ const NearbyStars = ({
             {/* soft glow, brighter for luminous stars */}
             <mesh>
               <sphereGeometry args={[size * 1.7, 20, 20]} />
-              <meshBasicMaterial color={star.color} transparent opacity={0.1 + star.lum * 0.14} depthWrite={false} />
+              <meshBasicMaterial color={star.color} transparent opacity={glow} depthWrite={false} />
             </mesh>
             {/* reached → gold-tinted outer glow, keeping the star's true colour */}
             {reached && (
               <mesh>
                 <sphereGeometry args={[size * 2.3, 20, 20]} />
                 <meshBasicMaterial color="#ffd166" transparent opacity={0.16} depthWrite={false} />
+              </mesh>
+            )}
+            {isDest && (
+              <mesh>
+                <sphereGeometry args={[size * 2.8, 24, 24]} />
+                <meshBasicMaterial color="#2fe0c0" transparent opacity={0.22} depthWrite={false} />
               </mesh>
             )}
             {/* leader line from the star up to its name tag */}
@@ -1250,6 +1261,11 @@ const Scene = ({
   goal,
   onFocus,
   focusName,
+  destination,
+  missionResult,
+  tripProgress,
+  missionFlying,
+  missionMode,
 }: {
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
@@ -1263,6 +1279,11 @@ const Scene = ({
   goal: { name: string; token: number } | null;
   onFocus: (name: string) => void;
   focusName: string | null;
+  destination: string | null;
+  missionResult: MissionResult | null;
+  tripProgress: number;
+  missionFlying: boolean;
+  missionMode: PropulsionMode;
 }) => (
   <>
     <ambientLight intensity={0.25} />
@@ -1300,15 +1321,35 @@ const Scene = ({
     <Heliosphere />
     <OortCloud />
 
+    {missionResult && destination ? (
+      <MissionFlight
+        destination={destination}
+        missionResult={missionResult}
+        mode={missionMode}
+        tripProgress={tripProgress}
+        missionFlying={missionFlying}
+        simYears={clock.current.years}
+        controlsRef={controlsRef}
+      />
+    ) : (
+      <MissionRoute destination={destination} />
+    )}
     <CatalogStars onFocus={onFocus} />
-    <NearbyStars lightYears={displayLY} onFocus={onFocus} clock={clock} showMinor={showMinor} focusName={focusName} />
+    <NearbyStars
+      lightYears={displayLY}
+      onFocus={onFocus}
+      clock={clock}
+      showMinor={showMinor}
+      focusName={focusName}
+      destinationName={destination}
+    />
 
     {BLACK_HOLES.map((bh) => (
       <BlackHoleBody key={bh.name} bh={bh} onFocus={onFocus} />
     ))}
     <LightSphere lightYears={displayLY} animating={animatingLight} onDone={() => setAnimatingLight(false)} />
 
-    <FlythroughCamera active={flying} radius={lightYears > 0 ? scaleDistanceAU(lightYears * AU_PER_LY) : 120} controlsRef={controlsRef} />
+    <FlythroughCamera active={flying && !missionFlying} radius={lightYears > 0 ? scaleDistanceAU(lightYears * AU_PER_LY) : 120} controlsRef={controlsRef} />
     <CameraDirector goal={goal} reach={lightYears} clock={clock} controlsRef={controlsRef} />
     <OrbitControls
       ref={controlsRef}
@@ -1318,7 +1359,7 @@ const Scene = ({
       screenSpacePanning
       enableDamping
       dampingFactor={0.09}
-      enabled={!flying}
+      enabled={!flying && !missionFlying}
       minDistance={0.4}
       maxDistance={MAX_ZOOM}
       zoomSpeed={0.55}
@@ -1332,16 +1373,35 @@ export interface SolarSystemHandle {
   expandLight: () => void;
   flythrough: () => void;
   exportPNG: () => void;
+  focusDestination: (name: string) => void;
 }
 
 interface SolarSystemProps {
   lightYears?: number;
   birthDate?: string;
+  destination?: string | null;
+  onDestinationSelect?: (name: string) => void;
+  missionResult?: MissionResult | null;
+  tripProgress?: number;
+  missionFlying?: boolean;
+  missionMode?: PropulsionMode;
 }
 
 /* ------------------------------- the wrapper ------------------------------ */
 export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
-  ({ lightYears = 0, birthDate = "" }, ref) => {
+  (
+    {
+      lightYears = 0,
+      birthDate = "",
+      destination = null,
+      onDestinationSelect,
+      missionResult = null,
+      tripProgress = 0,
+      missionFlying = false,
+      missionMode = "sublight",
+    },
+    ref,
+  ) => {
     const clock = useRef<SimClock>({ years: EPOCH_OFFSET, speed: 0.1, paused: false, camDist: 80 });
     const controlsRef = useRef<OrbitControlsImpl | null>(null);
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -1374,6 +1434,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     // exoplanet, where you're already up close and a camera jump would jar).
     const onPick = (name: string) => {
       setSelected(name);
+      if (isNavStar(name)) onDestinationSelect?.(name);
       const local = MOONS.some((m) => m.name === name) || EXOPLANETS.some((e) => e.name === name);
       if (!local) focus(name);
     };
@@ -1431,6 +1492,10 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       },
       flythrough: () => setFlying((v) => !v),
       exportPNG,
+      focusDestination: (name: string) => {
+        if (isNavStar(name)) onDestinationSelect?.(name);
+        focus(name);
+      },
     }));
 
     const setSpeedVal = (v: number) => {
@@ -1468,6 +1533,11 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             goal={goal}
             onFocus={onPick}
             focusName={focusName}
+            destination={destination}
+            missionResult={missionResult}
+            tripProgress={tripProgress}
+            missionFlying={missionFlying}
+            missionMode={missionMode}
           />
         </Canvas>
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Sparkles, Radio, Volume2, VolumeX } from "lucide-react";
 import { StarField } from "@/components/StarField";
 import { SolarSystem, type SolarSystemHandle } from "@/components/SolarSystem";
@@ -9,14 +9,19 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useReveal } from "@/hooks/useReveal";
 import { useAmbient } from "@/hooks/useAmbient";
 import {
-  buildShareQuery,
   computeLightJourney,
   nextStar,
-  parseBirthdayParam,
-  parseLeapParam,
   starsReached,
   type LightJourneyResult,
 } from "@/lib/lightJourney";
+import { MissionPlanner } from "@/components/MissionPlanner";
+import { RouteHUD } from "@/components/RouteHUD";
+import { computeMission } from "@/mission/preview";
+import { findNavStar } from "@/mission/stars";
+import { buildAppShareQuery, parseAppUrl } from "@/mission/url";
+import { DEFAULT_VESSEL, type MissionState } from "@/mission/types";
+
+const VISUAL_TRIP_MS = 36_000;
 
 const Index = () => {
   const [bday, setBday] = useState("");
@@ -26,11 +31,35 @@ const Index = () => {
   const [liveLy, setLiveLy] = useState<number | null>(null);
   const [readmeOpen, setReadmeOpen] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(
+    () => typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("dest"),
+  );
+  const [mission, setMission] = useState<MissionState>(() =>
+    typeof window !== "undefined"
+      ? parseAppUrl(new URLSearchParams(window.location.search)).mission
+      : { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
+  );
   const { muted, toggle } = useAmbient();
   const systemRef = useRef<SolarSystemHandle>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const hasJourney = useRef(false);
+
+  const syncUrl = (birth?: string, leap?: boolean) => {
+    try {
+      window.history.replaceState(
+        null,
+        "",
+        buildAppShareQuery({
+          bday: birth ?? (bday || undefined),
+          useLeap: leap ?? useLeap,
+          mission,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+  };
 
   const applyJourney = (birth: string, leap: boolean, scroll = false) => {
     const r = computeLightJourney(birth, leap);
@@ -42,11 +71,7 @@ const Index = () => {
     setError("");
     setResult(r);
     hasJourney.current = true;
-    try {
-      window.history.replaceState(null, "", buildShareQuery(birth, leap));
-    } catch {
-      /* ignore */
-    }
+    syncUrl(birth, leap);
     if (scroll) {
       requestAnimationFrame(() =>
         systemSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -63,12 +88,12 @@ const Index = () => {
     applyJourney(bday, useLeap, scroll);
   };
 
-  // On load: restore a shared birthday (and leap preference) from the URL.
+  // On load: restore birthday + mission from the URL.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const b = parseBirthdayParam(params.get("b"));
+    const { bday: b, leap, mission: m } = parseAppUrl(new URLSearchParams(window.location.search));
+    setMission(m);
+    if (m.destination) setPlannerOpen(true);
     if (b) {
-      const leap = parseLeapParam(params.get("leap"));
       setBday(b);
       setUseLeap(leap);
       applyJourney(b, leap, true);
@@ -76,6 +101,12 @@ const Index = () => {
       setShowHint(true);
     }
   }, []);
+
+  // Keep share URL in sync with mission planner state.
+  useEffect(() => {
+    if (!hasJourney.current && !mission.destination) return;
+    syncUrl();
+  }, [mission]);
 
   // Recompute stats when leap-year preference changes after a journey exists.
   useEffect(() => {
@@ -230,6 +261,10 @@ const Index = () => {
         setUseLeap={setUseLeap}
         error={error}
         onReadme={() => setReadmeOpen(true)}
+        mission={mission}
+        onMissionChange={setMission}
+        plannerOpen={plannerOpen}
+        onPlannerToggle={() => setPlannerOpen((v) => !v)}
       />
 
       {/* ============================ RESULTS ============================ */}
@@ -264,6 +299,10 @@ const SolarSystemSection = ({
   setUseLeap,
   error,
   onReadme,
+  mission,
+  onMissionChange,
+  plannerOpen,
+  onPlannerToggle,
 }: {
   sectionRef: React.RefObject<HTMLDivElement>;
   systemRef: React.RefObject<SolarSystemHandle>;
@@ -275,7 +314,69 @@ const SolarSystemSection = ({
   setUseLeap: (v: boolean) => void;
   error: string;
   onReadme: () => void;
+  mission: MissionState;
+  onMissionChange: (m: MissionState) => void;
+  plannerOpen: boolean;
+  onPlannerToggle: () => void;
 }) => {
+  const [tripProgress, setTripProgress] = useState(0);
+  const [missionFlying, setMissionFlying] = useState(false);
+  const flightStart = useRef<number | null>(null);
+  const flightFrom = useRef(0);
+  const flightRaf = useRef<number>(0);
+
+  const destStar = mission.destination ? findNavStar(mission.destination) : undefined;
+  const missionResult = useMemo(
+    () => (destStar ? computeMission(destStar, mission.mode, mission.vessel, mission.origin) : null),
+    [destStar, mission.mode, mission.vessel, mission.origin],
+  );
+
+  const stopFlight = () => {
+    setMissionFlying(false);
+    flightStart.current = null;
+    if (flightRaf.current) cancelAnimationFrame(flightRaf.current);
+  };
+
+  const startFlight = (reset = false) => {
+    if (!mission.destination) return;
+    if (reset) {
+      setTripProgress(0);
+      flightFrom.current = 0;
+    } else {
+      flightFrom.current = tripProgress;
+    }
+    setMissionFlying(true);
+    flightStart.current = null;
+    systemRef.current?.focusDestination(mission.destination);
+  };
+
+  useEffect(() => {
+    if (!missionFlying) return;
+
+    const tick = (now: number) => {
+      if (flightStart.current === null) flightStart.current = now;
+      const frac = Math.min(1, (now - flightStart.current) / VISUAL_TRIP_MS);
+      const p = flightFrom.current + (1 - flightFrom.current) * frac;
+      setTripProgress(p);
+      if (frac < 1) {
+        flightRaf.current = requestAnimationFrame(tick);
+      } else {
+        setMissionFlying(false);
+        flightStart.current = null;
+      }
+    };
+
+    flightRaf.current = requestAnimationFrame(tick);
+    return () => {
+      if (flightRaf.current) cancelAnimationFrame(flightRaf.current);
+    };
+  }, [missionFlying]);
+
+  useEffect(() => {
+    setTripProgress(0);
+    stopFlight();
+  }, [mission.destination, mission.mode]);
+
   return (
     <section ref={sectionRef} className="relative z-10 h-[100dvh] w-full">
       <ErrorBoundary
@@ -291,8 +392,49 @@ const SolarSystemSection = ({
           </div>
         }
       >
-        <SolarSystem ref={systemRef} lightYears={lightYears} birthDate={bday} />
+        <SolarSystem
+          ref={systemRef}
+          lightYears={lightYears}
+          birthDate={bday}
+          destination={mission.destination}
+          missionResult={missionResult}
+          tripProgress={tripProgress}
+          missionFlying={missionFlying}
+          missionMode={mission.mode}
+          onDestinationSelect={(name) =>
+            onMissionChange({ ...mission, destination: name })
+          }
+        />
       </ErrorBoundary>
+
+      {missionResult && mission.destination && (
+        <RouteHUD
+          destination={mission.destination}
+          result={missionResult}
+          progress={tripProgress}
+          flying={missionFlying}
+          onProgressChange={(p) => {
+            stopFlight();
+            setTripProgress(p);
+          }}
+          onPlayPause={() => {
+            if (missionFlying) stopFlight();
+            else startFlight(false);
+          }}
+          onStop={() => {
+            stopFlight();
+            setTripProgress(0);
+          }}
+        />
+      )}
+
+      <MissionPlanner
+        open={plannerOpen}
+        onToggle={onPlannerToggle}
+        mission={mission}
+        onChange={onMissionChange}
+        onNavigate={() => startFlight(true)}
+      />
 
       {/* always-visible birthday input (heading removed — it repeated the hero) */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-5 pt-5 text-center">

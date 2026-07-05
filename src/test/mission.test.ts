@@ -1,0 +1,61 @@
+import { describe, it, expect } from "vitest";
+import { computeMission, missionPreview } from "@/mission/preview";
+import { findNavStar, isNavStar, searchNavStars } from "@/mission/stars";
+import { buildAppShareQuery, parseMissionParams } from "@/mission/url";
+import { DEFAULT_VESSEL } from "@/mission/types";
+
+describe("nav stars", () => {
+  it("finds featured stars by name", () => {
+    expect(findNavStar("Sirius")?.distanceLy).toBeCloseTo(8.58, 1);
+    expect(isNavStar("Sirius")).toBe(true);
+    expect(isNavStar("Sun")).toBe(false);
+  });
+
+  it("searches by prefix", () => {
+    const hits = searchNavStars("Prox");
+    expect(hits[0]?.name).toBe("Proxima Centauri");
+  });
+});
+
+describe("mission URL", () => {
+  it("round-trips destination and mode", () => {
+    const params = new URLSearchParams("dest=Proxima%20Centauri&mode=light_speed&mass=500");
+    const mission = parseMissionParams(params);
+    expect(mission.destination).toBe("Proxima Centauri");
+    expect(mission.mode).toBe("light_speed");
+    expect(mission.vessel.dryMassKg).toBe(500);
+
+    const q = buildAppShareQuery({
+      bday: "1990-01-01",
+      useLeap: true,
+      mission,
+    });
+    expect(q).toContain("b=1990-01-01");
+    expect(q).toContain("dest=Proxima");
+    expect(q).toContain("mode=light_speed");
+    expect(q).toContain("mass=500");
+  });
+
+  it("omits default params from share URL", () => {
+    const q = buildAppShareQuery({
+      mission: { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
+    });
+    expect(q).toBe("");
+  });
+});
+
+describe("mission preview", () => {
+  it("estimates light-speed ETA as distance in years", () => {
+    const star = findNavStar("Sirius")!;
+    const p = missionPreview(star, "light_speed", DEFAULT_VESSEL)!;
+    expect(p.etaLabel).toContain("year");
+    expect(p.ready).toBe(true);
+  });
+
+  it("computes nuclear mode with full profile", () => {
+    const star = findNavStar("Proxima Centauri")!;
+    const r = computeMission(star, "nuclear", DEFAULT_VESSEL)!;
+    expect(r.etaYears).toBeGreaterThan(1000);
+    expect(r.deltaVKms).toBeGreaterThan(0);
+  });
+});
