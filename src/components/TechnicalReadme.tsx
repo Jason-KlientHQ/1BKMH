@@ -96,10 +96,13 @@ solar_sail      → F = 2P/c × area at 1 AU, numerical integration to target
 gravity_assist  → Jupiter (+9.2 km/s) + Saturn (+4.8 km/s) flybys,
                   plus 60% of onboard fuel for a departure burn`}</Code>
               The cinematic flight visualiser maps mission legs to 3D waypoints along a
-              piecewise path; gravity-assist legs snap to planet positions at the current
-              sim clock. ETA remaining in the HUD scales with mission ETA × trip progress
-              (0–100%). Share links encode <C>dest</C>, <C>mode</C>, vessel params, and{" "}
-              <C>fly=1</C> to auto-start the route animation on load.
+              piecewise path. Gravity-assist legs render as curved hyperbola-style flyby
+              arcs (Bezier chains swinging around Jupiter and Saturn at a miss distance
+              in scene units), with gentle bowed transfers between legs. Planet anchors
+              use heliocentric positions at the current sim clock. ETA remaining in the
+              HUD scales with mission ETA × trip progress (0–100%). Share links encode{" "}
+              <C>dest</C>, <C>mode</C>, vessel params, and <C>fly=1</C> to auto-start
+              the route animation on load.
             </Section>
 
             <Section title="## Assumptions & simplifications">

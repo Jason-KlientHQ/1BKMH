@@ -427,6 +427,7 @@ const SolarSystemSection = ({
           tripProgress={tripProgress}
           missionFlying={missionFlying}
           missionMode={mission.mode}
+          missionOrigin={mission.origin}
           onDestinationSelect={(name) =>
             onMissionChange({ ...mission, destination: name })
           }

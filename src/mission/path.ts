@@ -1,7 +1,8 @@
 import { starScenePosition, type Vec3 } from "@/astrometry/positions";
 import { PLANETS } from "@/data/solarSystem";
+import { flybyArc, transferArc } from "@/mission/flyby";
 import type { NavStar } from "@/mission/stars";
-import type { MissionLeg, MissionResult, PropulsionMode } from "@/mission/types";
+import type { MissionLeg, MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
 import { heliocentricAU, toScenePosition } from "@/lib/orbital";
 
 export interface MissionPathPoint {
@@ -21,34 +22,102 @@ function planetScenePos(name: string, years: number): Vec3 {
   return toScenePosition(heliocentricAU(p, years));
 }
 
+function appendSamples(
+  out: MissionPathPoint[],
+  samples: Vec3[],
+  label: string,
+  tStart: number,
+  tEnd: number,
+  includeFirst: boolean,
+) {
+  const n = samples.length;
+  if (n < 2) return;
+  const start = includeFirst ? 0 : 1;
+  for (let i = start; i < n; i++) {
+    const frac = i / (n - 1);
+    out.push({
+      position: samples[i],
+      label: i === n - 1 ? label : "",
+      tEnd: tStart + (tEnd - tStart) * frac,
+    });
+  }
+}
+
+function buildGravityAssistPath(
+  result: MissionResult,
+  dest: NavStar,
+  simYears: number,
+  origin: MissionOrigin,
+): MissionPathPoint[] {
+  const total = Math.max(result.etaYears, 1e-9);
+  const sun: Vec3 = [0, 0, 0];
+  const earth = planetScenePos("Earth", simYears);
+  const jupiter = planetScenePos("Jupiter", simYears);
+  const saturn = planetScenePos("Saturn", simYears);
+  const destPos = starScenePosition(dest.distanceLy, dest.unitDir);
+
+  const start = origin === "earth" ? earth : sun;
+  const points: MissionPathPoint[] = [{ position: start, label: "Origin", tEnd: 0 }];
+  let cursor = start;
+  let cum = 0;
+
+  for (const leg of result.legs) {
+    const dur = leg.durationYears ?? 0;
+    const tStart = cum;
+    cum = Math.min(1, cum + dur / total);
+    const label = leg.label;
+
+    let samples: Vec3[] = [];
+    const sampleCount = (n: number) => Math.max(8, Math.round(n * (dur / total) * 120));
+
+    if (/Earth|Solar/i.test(label)) {
+      samples = transferArc(cursor, jupiter, sampleCount(10));
+    } else if (/Jupiter/i.test(label)) {
+      samples = flybyArc(cursor, jupiter, saturn, sampleCount(28), 11);
+    } else if (/Saturn/i.test(label)) {
+      samples = flybyArc(cursor, saturn, destPos, sampleCount(28), 9);
+    } else if (/Nuclear/i.test(label)) {
+      const burnEnd = lerp3(cursor, saturn, 0.35);
+      samples = transferArc(cursor, burnEnd, 6);
+    } else if (/Coast/i.test(label)) {
+      samples = transferArc(cursor, destPos, sampleCount(24));
+    } else {
+      samples = transferArc(cursor, destPos, 8);
+    }
+
+    appendSamples(points, samples, label, tStart, cum, false);
+    if (samples.length) cursor = samples[samples.length - 1];
+  }
+
+  if (points[points.length - 1].tEnd < 1) {
+    points.push({ position: destPos, label: dest.name, tEnd: 1 });
+  }
+
+  return points;
+}
+
 /** Map mission legs to 3D waypoints for the flight visualiser. */
 export function buildMissionPath(
   result: MissionResult,
   dest: NavStar,
   mode: PropulsionMode,
   simYears = 0,
+  origin: MissionOrigin = "sun",
 ): MissionPathPoint[] {
-  const origin: Vec3 = [0, 0, 0];
+  if (mode === "gravity_assist") {
+    return buildGravityAssistPath(result, dest, simYears, origin);
+  }
+
+  const originPos: Vec3 = [0, 0, 0];
   const destPos = starScenePosition(dest.distanceLy, dest.unitDir);
   const total = Math.max(result.etaYears, 1e-9);
 
-  const legPosition = (leg: MissionLeg, cum: number): Vec3 => {
-    if (mode === "gravity_assist") {
-      if (leg.label.includes("Jupiter")) return planetScenePos("Jupiter", simYears);
-      if (leg.label.includes("Saturn")) return planetScenePos("Saturn", simYears);
-      if (leg.label.includes("Earth") || leg.label.includes("Solar")) return origin;
-      if (leg.label.includes("Coast")) return destPos;
-      return lerp3(planetScenePos("Saturn", simYears), destPos, 0.35);
-    }
-    return lerp3(origin, destPos, cum);
-  };
-
-  const points: MissionPathPoint[] = [{ position: origin, label: "Origin", tEnd: 0 }];
+  const points: MissionPathPoint[] = [{ position: originPos, label: "Origin", tEnd: 0 }];
   let cum = 0;
 
   for (const leg of result.legs) {
     cum = Math.min(1, cum + (leg.durationYears ?? 0) / total);
-    points.push({ position: legPosition(leg, cum), label: leg.label, tEnd: cum });
+    points.push({ position: lerp3(originPos, destPos, cum), label: leg.label, tEnd: cum });
   }
 
   if (points[points.length - 1].tEnd < 1) {
@@ -75,11 +144,7 @@ export function interpolatePath(points: MissionPathPoint[], t: number): Vec3 {
 }
 
 export function pathLineSegments(points: MissionPathPoint[]): Vec3[] {
-  const uniq: MissionPathPoint[] = [];
-  for (const p of points) {
-    if (!uniq.length || p.tEnd > uniq[uniq.length - 1].tEnd) uniq.push(p);
-  }
-  return uniq.map((p) => p.position);
+  return points.map((p) => p.position);
 }
 
 export interface LegProgress {

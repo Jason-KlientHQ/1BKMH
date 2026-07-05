@@ -5,13 +5,13 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { findNavStar } from "@/mission/stars";
 import { buildMissionPath, interpolatePath, pathLineSegments } from "@/mission/path";
-import type { MissionResult } from "@/mission/types";
-import type { PropulsionMode } from "@/mission/types";
+import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
 
 interface MissionFlightProps {
   destination: string | null;
   missionResult: MissionResult | null;
   mode: PropulsionMode;
+  missionOrigin: MissionOrigin;
   tripProgress: number;
   missionFlying: boolean;
   simYears: number;
@@ -23,6 +23,7 @@ export const MissionFlight = ({
   destination,
   missionResult,
   mode,
+  missionOrigin,
   tripProgress,
   missionFlying,
   simYears,
@@ -31,8 +32,8 @@ export const MissionFlight = ({
   const destStar = destination ? findNavStar(destination) : undefined;
   const path = useMemo(() => {
     if (!destStar || !missionResult) return null;
-    return buildMissionPath(missionResult, destStar, mode, simYears);
-  }, [destStar, missionResult, mode, simYears]);
+    return buildMissionPath(missionResult, destStar, mode, simYears, missionOrigin);
+  }, [destStar, missionResult, mode, simYears, missionOrigin]);
 
   const linePoints = useMemo(() => (path ? pathLineSegments(path) : []), [path]);
   const vesselPos = useMemo(

@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { PLANETS } from "@/data/solarSystem";
 import { buildMissionPath, interpolatePath, legAtProgress } from "@/mission/path";
+import { distanceToLine } from "@/mission/flyby";
 import { computeMission } from "@/mission/compute";
 import { findNavStar } from "@/mission/stars";
 import { DEFAULT_VESSEL } from "@/mission/types";
+import { heliocentricAU, toScenePosition } from "@/lib/orbital";
 
 describe("mission path", () => {
   it("interpolates along a straight route", () => {
@@ -15,13 +18,33 @@ describe("mission path", () => {
     expect(Math.hypot(end[0], end[1], end[2])).toBeGreaterThan(100);
   });
 
-  it("places Jupiter on gravity-assist path", () => {
+  it("builds dense curved gravity-assist path with flyby arcs", () => {
     const star = findNavStar("Sirius")!;
     const result = computeMission(star, "gravity_assist", DEFAULT_VESSEL, "earth")!;
-    const path = buildMissionPath(result, star, "gravity_assist", 0);
-    const jupiterLeg = path.find((p) => p.label.includes("Jupiter"));
-    expect(jupiterLeg).toBeDefined();
-    expect(Math.hypot(jupiterLeg!.position[0], jupiterLeg!.position[1], jupiterLeg!.position[2])).toBeGreaterThan(10);
+    const path = buildMissionPath(result, star, "gravity_assist", 0, "earth");
+
+    expect(path.length).toBeGreaterThan(40);
+
+    const jupiter = PLANETS.find((p) => p.name === "Jupiter")!;
+    const jupiterPos = toScenePosition(heliocentricAU(jupiter, 0));
+
+    const jupiterLegEnd = path.find((p) => p.label.includes("Jupiter"))!;
+    const jupiterLegStartIdx = path.findIndex((p) => /Earth|Solar/i.test(p.label));
+    const jupiterSamples = path.slice(jupiterLegStartIdx + 1, path.indexOf(jupiterLegEnd) + 1);
+
+    const mid = jupiterSamples[Math.floor(jupiterSamples.length / 2)]?.position;
+    expect(mid).toBeDefined();
+    expect(distanceToLine(mid!, path[0].position, jupiterLegEnd.position)).toBeGreaterThan(1.5);
+
+    const nearPlanet = jupiterSamples.some((p) => {
+      const d = Math.hypot(
+        p.position[0] - jupiterPos[0],
+        p.position[1] - jupiterPos[1],
+        p.position[2] - jupiterPos[2],
+      );
+      return d > 6 && d < 25;
+    });
+    expect(nearPlanet).toBe(true);
   });
 
   it("resolves current leg from progress", () => {

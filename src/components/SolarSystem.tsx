@@ -51,7 +51,7 @@ import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
 import { MissionRoute } from "@/components/MissionRoute";
 import { MissionFlight } from "@/components/MissionFlight";
-import type { MissionResult, PropulsionMode } from "@/mission/types";
+import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
 
 interface SimClock {
   years: number;
@@ -1266,6 +1266,7 @@ const Scene = ({
   tripProgress,
   missionFlying,
   missionMode,
+  missionOrigin,
 }: {
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
@@ -1284,6 +1285,7 @@ const Scene = ({
   tripProgress: number;
   missionFlying: boolean;
   missionMode: PropulsionMode;
+  missionOrigin: MissionOrigin;
 }) => (
   <>
     <ambientLight intensity={0.25} />
@@ -1326,6 +1328,7 @@ const Scene = ({
         destination={destination}
         missionResult={missionResult}
         mode={missionMode}
+        missionOrigin={missionOrigin}
         tripProgress={tripProgress}
         missionFlying={missionFlying}
         simYears={clock.current.years}
@@ -1386,6 +1389,7 @@ interface SolarSystemProps {
   tripProgress?: number;
   missionFlying?: boolean;
   missionMode?: PropulsionMode;
+  missionOrigin?: MissionOrigin;
 }
 
 /* ------------------------------- the wrapper ------------------------------ */
@@ -1401,6 +1405,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       tripProgress = 0,
       missionFlying = false,
       missionMode = "sublight",
+      missionOrigin = "sun",
     },
     ref,
   ) => {
@@ -1540,6 +1545,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             tripProgress={tripProgress}
             missionFlying={missionFlying}
             missionMode={missionMode}
+            missionOrigin={missionOrigin}
           />
         </Canvas>
 
