@@ -1,0 +1,10 @@
+NASA 3D model assets (public domain / NASA media usage guidelines)
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+hubble.glb — NASA-3D-Resources, Hubble Space Telescope (A)
+jwst.glb — NASA-3D-Resources, James Webb Space Telescope (A)
+iss.glb — NASA-3D-Resources, International Space Station (ISS) (A)
+voyager.glb — NASA-3D-Resources, Voyager Probe (A)
+saturn.glb — NASA Science, Saturn 3D Model (science.nasa.gov/resource/saturn-3d-model/)
+
+Source repository: https://github.com/nasa/NASA-3D-Resources

@@ -46,7 +46,9 @@ import {
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePosition } from "@/astrometry/positions";
+import { GltfWithFallback, preloadNasaModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
+import { NASA_GLTF } from "@/data/nasaModels";
 import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
 import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
@@ -281,6 +283,51 @@ const Sun = ({ onFocus }: { onFocus: (name: string) => void }) => {
 /** Saturn's ring plane is tilted ~26.73° to its orbital plane — stable, not wobbling. */
 const SATURN_RING_TILT = (26.73 * Math.PI) / 180;
 
+preloadNasaModels();
+
+const SaturnProcedural = ({
+  r,
+  body,
+  ringInner,
+  ringMid,
+  ringOuter,
+  oblate,
+  pickHandlers,
+}: {
+  r: number;
+  body: Body;
+  ringInner: number;
+  ringMid: number;
+  ringOuter: number;
+  oblate: [number, number, number];
+  pickHandlers: object;
+}) => (
+  <>
+    {body.ring && (
+      <group rotation={[SATURN_RING_TILT, 0, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[ringInner, ringMid, 64]} />
+          <meshBasicMaterial color={body.ring!.color} transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[ringMid + 0.08, ringOuter, 64]} />
+          <meshBasicMaterial color={body.ring!.color} transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      </group>
+    )}
+    <group scale={oblate}>
+      <mesh {...pickHandlers}>
+        <sphereGeometry args={[r, 32, 32]} />
+        <meshStandardMaterial color={body.color} roughness={0.75} metalness={0.05} />
+      </mesh>
+      <mesh scale={[1.001, 1.001, 1.001]}>
+        <sphereGeometry args={[r, 32, 32]} />
+        <meshStandardMaterial color="#d4bc8a" transparent opacity={0.18} roughness={1} depthWrite={false} />
+      </mesh>
+    </group>
+  </>
+);
+
 const planetOblateness = (name: string): [number, number, number] => {
   if (name === "Jupiter" || name === "Saturn") return [1, 0.91, 1];
   if (name === "Uranus" || name === "Neptune") return [1, 0.96, 1];
@@ -343,52 +390,72 @@ const Planet = ({
       </mesh>
 
       <group ref={orbitRef}>
-        {/* Rings stay fixed in space — only the planet body spins. */}
-        {body.ring && (
-          <group rotation={[SATURN_RING_TILT, 0, 0]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[ringInner, ringMid, 64]} />
-              <meshBasicMaterial color={body.ring.color} transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
-            </mesh>
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[ringMid + 0.08, ringOuter, 64]} />
-              <meshBasicMaterial color={body.ring.color} transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
+        {body.name === "Saturn" ? (
+          <group>
+            <GltfWithFallback
+              url={NASA_GLTF.saturn}
+              targetSize={r * 2.5}
+              rotation={[SATURN_RING_TILT, 0, 0]}
+              fallback={
+                <SaturnProcedural
+                  r={r}
+                  body={body}
+                  ringInner={ringInner}
+                  ringMid={ringMid}
+                  ringOuter={ringOuter}
+                  oblate={oblate}
+                  pickHandlers={pickHandlers}
+                />
+              }
+            />
+            <mesh {...pickHandlers} visible={false}>
+              <sphereGeometry args={[r * 1.35, 12, 12]} />
+              <meshBasicMaterial transparent opacity={0} />
             </mesh>
           </group>
+        ) : (
+          <>
+            {body.ring && (
+              <group rotation={[SATURN_RING_TILT, 0, 0]}>
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                  <ringGeometry args={[ringInner, ringMid, 64]} />
+                  <meshBasicMaterial color={body.ring.color} transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                  <ringGeometry args={[ringMid + 0.08, ringOuter, 64]} />
+                  <meshBasicMaterial color={body.ring.color} transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+              </group>
+            )}
+
+            <group ref={spinRef} scale={oblate}>
+              <mesh {...pickHandlers}>
+                <sphereGeometry args={[r, 32, 32]} />
+                <meshStandardMaterial
+                  color={body.color}
+                  emissive={body.emissive ?? "#000000"}
+                  emissiveIntensity={body.emissive ? 0.5 : 0}
+                  roughness={body.name === "Jupiter" || body.name === "Saturn" ? 0.75 : 0.85}
+                  metalness={body.name === "Mercury" || body.name === "Venus" ? 0.12 : 0.05}
+                />
+              </mesh>
+
+              {body.name === "Earth" && (
+                <mesh scale={[1.03, 1.03, 1.03]}>
+                  <sphereGeometry args={[r, 24, 24]} />
+                  <meshBasicMaterial color="#6eb5ff" transparent opacity={0.14} depthWrite={false} />
+                </mesh>
+              )}
+
+              {body.name === "Jupiter" && (
+                <mesh scale={[1.001, 1.001, 1.001]}>
+                  <sphereGeometry args={[r, 32, 32]} />
+                  <meshStandardMaterial color="#c49560" transparent opacity={0.18} roughness={1} depthWrite={false} />
+                </mesh>
+              )}
+            </group>
+          </>
         )}
-
-        <group ref={spinRef} scale={oblate}>
-          <mesh {...pickHandlers}>
-            <sphereGeometry args={[r, 32, 32]} />
-            <meshStandardMaterial
-              color={body.color}
-              emissive={body.emissive ?? "#000000"}
-              emissiveIntensity={body.emissive ? 0.5 : 0}
-              roughness={body.name === "Jupiter" || body.name === "Saturn" ? 0.75 : 0.85}
-              metalness={body.name === "Mercury" || body.name === "Venus" ? 0.12 : 0.05}
-            />
-          </mesh>
-
-          {body.name === "Earth" && (
-            <mesh scale={[1.03, 1.03, 1.03]}>
-              <sphereGeometry args={[r, 24, 24]} />
-              <meshBasicMaterial color="#6eb5ff" transparent opacity={0.14} depthWrite={false} />
-            </mesh>
-          )}
-
-          {(body.name === "Jupiter" || body.name === "Saturn") && (
-            <mesh scale={[1.001, 1.001, 1.001]}>
-              <sphereGeometry args={[r, 32, 32]} />
-              <meshStandardMaterial
-                color={body.name === "Jupiter" ? "#c49560" : "#d4bc8a"}
-                transparent
-                opacity={0.18}
-                roughness={1}
-                depthWrite={false}
-              />
-            </mesh>
-          )}
-        </group>
 
         {showLabel && (
           <Html position={[0, r + 0.7, 0]} center distanceFactor={50} className="ss-label">
