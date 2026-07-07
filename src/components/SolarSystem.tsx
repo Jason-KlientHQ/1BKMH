@@ -73,6 +73,7 @@ interface SimClock {
   years: number;
   anchor: number;
   orbitalYears: number;
+  playDeltaYears: number;
   speed: number;
   paused: boolean;
   camDist: number;
@@ -104,7 +105,12 @@ const frameDistanceFor = (reach: number) =>
 const starScenePos = (s: StarPOI, epochYears: number): THREE.Vector3 =>
   new THREE.Vector3(...starScenePositionAtEpoch(s.distance, s.dir, s.name, epochYears));
 
-const bodyScenePos = (name: string, orbitalYears: number): THREE.Vector3 => {
+const bodyScenePos = (
+  name: string,
+  orbitalYears: number,
+  playDeltaYears = 0,
+  trueLeoPeriods = false,
+): THREE.Vector3 => {
   if (name === "__light__" || name === "Sun") return new THREE.Vector3(0, 0, 0);
   const p = PLANETS.find((b) => b.name === name);
   if (p) {
@@ -140,7 +146,13 @@ const bodyScenePos = (name: string, orbitalYears: number): THREE.Vector3 => {
     if (sc.orbit === "earth") {
       const earthCrafts = SPACECRAFT.filter((x) => x.orbit === "earth");
       const idx = earthCrafts.findIndex((x) => x.name === name);
-      const [x, y, z] = earthCraftScenePosition(sc, Math.max(0, idx), orbitalYears);
+      const [x, y, z] = earthCraftScenePosition(
+        sc,
+        Math.max(0, idx),
+        orbitalYears,
+        playDeltaYears,
+        trueLeoPeriods,
+      );
       return new THREE.Vector3(x, y, z);
     }
     return new THREE.Vector3(...(sc.dir ?? [1, 0, 0])).normalize().multiplyScalar(scaleDistanceAU(sc.distanceAU ?? 1));
@@ -278,6 +290,7 @@ const TimeKeeper = ({
   useFrame((_, delta) => {
     const c = clock.current;
     if (!c.paused) c.years += delta * BASE_YEARS_PER_SEC * c.speed;
+    c.playDeltaYears = c.years - c.anchor;
     c.orbitalYears = computeOrbitalEpoch({
       birthDate,
       lifeYears,
@@ -923,10 +936,12 @@ const SunSpacecraft = ({ craft, onFocus }: { craft: Spacecraft; onFocus: (name: 
 const EarthSatellites = ({
   clock,
   show,
+  trueLeoPeriods,
   onFocus,
 }: {
   clock: React.MutableRefObject<SimClock>;
   show: boolean;
+  trueLeoPeriods: boolean;
   onFocus: (name: string) => void;
 }) => {
   const list = useMemo(() => SPACECRAFT.filter((s) => s.orbit === "earth"), []);
@@ -934,13 +949,13 @@ const EarthSatellites = ({
 
   useFrame(() => {
     if (!show) return;
-    const t = clock.current.orbitalYears;
+    const { orbitalYears, playDeltaYears } = clock.current;
     list.forEach((s, i) => {
       const g = refs.current[i];
       if (!g) return;
-      const [x, y, z] = earthCraftScenePosition(s, i, t);
+      const [x, y, z] = earthCraftScenePosition(s, i, orbitalYears, playDeltaYears, trueLeoPeriods);
       g.position.set(x, y, z);
-      g.rotation.y = t * (2 + i * 0.4);
+      g.rotation.y = playDeltaYears * (0.4 + i * 0.15);
     });
   });
 
@@ -1267,13 +1282,13 @@ const CameraDirector = ({
   goal,
   reach,
   clock,
-  scrubYears,
+  trueLeoPeriods,
   controlsRef,
 }: {
   goal: { name: string; token: number } | null;
   reach: number;
   clock: React.MutableRefObject<SimClock>;
-  scrubYears: number | null;
+  trueLeoPeriods: boolean;
   controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
 }) => {
   const { camera } = useThree();
@@ -1304,7 +1319,12 @@ const CameraDirector = ({
     }
     if (s.phase === "idle") return;
 
-    const targetNow = bodyScenePos(s.name, clock.current.orbitalYears);
+    const targetNow = bodyScenePos(
+      s.name,
+      clock.current.orbitalYears,
+      clock.current.playDeltaYears,
+      trueLeoPeriods,
+    );
 
     if (s.phase === "fly") {
       if (s.t0 === null) s.t0 = state.clock.getElapsedTime();
@@ -1617,7 +1637,7 @@ const Scene = ({
     {SPACECRAFT.filter((s) => s.orbit === "sun").map((s) => (
       <SunSpacecraft key={s.name} craft={s} onFocus={onFocus} />
     ))}
-    <EarthSatellites clock={clock} show={showMinor} onFocus={onFocus} />
+    <EarthSatellites clock={clock} show={showMinor} trueLeoPeriods={trueMoonPeriods} onFocus={onFocus} />
     {EXOTIC_OBJECTS.map((o) => (
       <ExoticBody key={o.name} obj={o} onFocus={onFocus} />
     ))}
@@ -1662,7 +1682,7 @@ const Scene = ({
     <LightSphere lightYears={displayLY} animating={animatingLight} onDone={() => setAnimatingLight(false)} />
 
     <FlythroughCamera active={flying && !missionFlying} radius={lightYears > 0 ? scaleDistanceAU(lightYears * AU_PER_LY) : 120} controlsRef={controlsRef} />
-    <CameraDirector goal={goal} reach={lightYears} clock={clock} scrubYears={scrubYears} controlsRef={controlsRef} />
+    <CameraDirector goal={goal} reach={lightYears} clock={clock} trueLeoPeriods={trueMoonPeriods} controlsRef={controlsRef} />
     <OrbitControls
       ref={controlsRef}
       makeDefault
@@ -1727,6 +1747,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       years: DEFAULT_CLOCK_ANCHOR,
       anchor: DEFAULT_CLOCK_ANCHOR,
       orbitalYears: DEFAULT_CLOCK_ANCHOR,
+      playDeltaYears: 0,
       speed: 0.1,
       paused: false,
       camDist: 80,
@@ -1759,6 +1780,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
 
     useLayoutEffect(() => {
       const c = clock.current;
+      c.playDeltaYears = c.years - c.anchor;
       c.orbitalYears = computeOrbitalEpoch({
         birthDate,
         lifeYears: lightYears,
