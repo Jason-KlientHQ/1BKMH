@@ -9,12 +9,28 @@
  * than outer ones (Kepler's third law), because each body advances by its true
  * mean motion 2π/period each unit of simulated time.
  *
- * Coordinate convention: astronomy works in the ecliptic plane with z out of
- * plane. We map to three.js as (x, z_ecliptic_out → y_up, y_ecliptic → z) so the
- * ecliptic is the horizontal XZ plane and inclinations lift bodies in Y.
+ * Coordinate convention: heliocentric positions are computed in the J2000 ecliptic
+ * frame (x toward vernal equinox, z toward ecliptic north). Scene coordinates match
+ * the equatorial frame used for stars (x, y = celestial north, z). The ecliptic is
+ * rotated into that frame by the J2000 obliquity (~23.44°) before log scaling.
  */
 
 const DEG = Math.PI / 180;
+
+/** Mean obliquity of the ecliptic at J2000.0 (IAU 2006). */
+export const J2000_OBLIQUITY_DEG = 23.4392911;
+export const J2000_OBLIQUITY_RAD = J2000_OBLIQUITY_DEG * DEG;
+
+/** Rotate a heliocentric vector from J2000 ecliptic to equatorial (same axes as stars). */
+export function eclipticToEquatorial(v: Vec3): Vec3 {
+  const sinE = Math.sin(J2000_OBLIQUITY_RAD);
+  const cosE = Math.cos(J2000_OBLIQUITY_RAD);
+  return {
+    x: v.x,
+    y: v.y * sinE + v.z * cosE,
+    z: v.y * cosE - v.z * sinE,
+  };
+}
 
 export interface OrbitalElements {
   a: number; // semi-major axis (AU)
@@ -106,14 +122,14 @@ export function scaleRadiusKm(km: number): number {
   return Math.max(0.05, SIZE_C * Math.log10(1 + km / SIZE_K0));
 }
 
-/** Map an ecliptic-AU vector to a log-scaled three.js position (Y up). */
+/** Map an ecliptic-AU vector to a log-scaled equatorial scene position (Y = north). */
 export function toScenePosition(au: Vec3): [number, number, number] {
   const r = Math.sqrt(au.x * au.x + au.y * au.y + au.z * au.z);
   if (r < 1e-9) return [0, 0, 0];
+  const eq = eclipticToEquatorial(au);
   const sr = scaleDistanceAU(r);
   const k = sr / r;
-  // ecliptic (x, y, z_out) → three (x, z_out=up, y)
-  return [au.x * k, au.z * k, au.y * k];
+  return [eq.x * k, eq.y * k, eq.z * k];
 }
 
 /** Sample a full orbit path as log-scaled three.js points for drawing the ring. */

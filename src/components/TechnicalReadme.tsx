@@ -90,7 +90,10 @@ totalOrbits = ageSeconds / 3,135.3`}</Code>
 E − e·sin E = M                     // solved iteratively for E
 (x,y) in orbital plane, then rotated by ϖ, i, Ω → ecliptic`}</Code>
               Relative orbital speeds are therefore physically correct (Kepler's 3rd
-              law): inner planets really do move faster than outer ones.
+              law): inner planets really do move faster than outer ones. Heliocentric
+              ecliptic positions are rotated by the J2000 obliquity (~23.44°) into the
+              same equatorial frame as catalog stars (Y = celestial north) before
+              log-scaling — so planet orbits and star directions share one sky.
             </Section>
 
             <Section title="## The scale (why it's log-piecewise)">

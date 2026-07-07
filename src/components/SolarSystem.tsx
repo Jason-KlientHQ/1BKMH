@@ -31,6 +31,7 @@ import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
 import { eventForYear } from "@/data/worldEvents";
 import {
   heliocentricAU,
+  J2000_OBLIQUITY_RAD,
   toScenePosition,
   scaleRadiusKm,
   scaleDistanceAU,
@@ -1590,8 +1591,11 @@ const CosmicLandmarkBody = ({
   );
 };
 
+/** Celestial-equator grid tilted to the J2000 ecliptic plane (matches planet orbits). */
 const EclipticGrid = () => (
-  <gridHelper args={[scaleDistanceAU(200) * 2, 48, "#1c2546", "#141b35"]} />
+  <group rotation={[-J2000_OBLIQUITY_RAD, 0, 0]}>
+    <gridHelper args={[scaleDistanceAU(200) * 2, 48, "#1c2546", "#141b35"]} />
+  </group>
 );
 
 

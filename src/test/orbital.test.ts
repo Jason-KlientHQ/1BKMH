@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { heliocentricAU, orbitPath, scaleDistanceAU, solveKepler, toScenePosition } from "@/lib/orbital";
+import {
+  eclipticToEquatorial,
+  heliocentricAU,
+  J2000_OBLIQUITY_DEG,
+  orbitPath,
+  scaleDistanceAU,
+  solveKepler,
+  toScenePosition,
+} from "@/lib/orbital";
+import { raDecToUnitVector } from "@/astrometry/positions";
 import { PLANETS } from "@/data/solarSystem";
 
 describe("solveKepler", () => {
@@ -34,11 +43,28 @@ describe("scale mapping", () => {
     expect(scaleDistanceAU(10)).toBeLessThan(scaleDistanceAU(100));
   });
 
-  it("maps heliocentric vectors to scene coordinates", () => {
+  it("maps vernal equinox direction unchanged (shared ecliptic/equatorial x-axis)", () => {
     const [x, y, z] = toScenePosition({ x: 1, y: 0, z: 0 });
     expect(x).toBeGreaterThan(0);
-    expect(y).toBe(0);
-    expect(z).toBe(0);
+    expect(y).toBeCloseTo(0, 5);
+    expect(z).toBeCloseTo(0, 5);
+  });
+
+  it("tilts ecliptic north pole to Dec ~+66.5° in equatorial scene coords", () => {
+    const pole = eclipticToEquatorial({ x: 0, y: 0, z: 1 });
+    const len = Math.hypot(pole.x, pole.y, pole.z);
+    const decDeg = (Math.asin(pole.y / len) * 180) / Math.PI;
+    expect(decDeg).toBeCloseTo(90 - J2000_OBLIQUITY_DEG, 1);
+    const [x, y, z] = raDecToUnitVector(18, 66.56);
+    expect(pole.x / len).toBeCloseTo(x, 2);
+    expect(pole.y / len).toBeCloseTo(y, 2);
+    expect(pole.z / len).toBeCloseTo(z, 2);
+  });
+
+  it("places summer solstice at Dec ~+obliquity", () => {
+    const solstice = eclipticToEquatorial({ x: 0, y: 1, z: 0 });
+    const decDeg = (Math.asin(solstice.y) * 180) / Math.PI;
+    expect(decDeg).toBeCloseTo(J2000_OBLIQUITY_DEG, 1);
   });
 
   it("samples closed orbit paths", () => {
