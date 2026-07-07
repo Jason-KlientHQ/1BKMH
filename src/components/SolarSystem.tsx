@@ -35,6 +35,8 @@ import {
   ROADSTER,
   SPACECRAFT,
   EXOTIC_OBJECTS,
+  COSMIC_LANDMARKS,
+  LOCAL_BUBBLE,
   AU_PER_LY,
   type Body,
   type Moon,
@@ -43,15 +45,20 @@ import {
   type Exoplanet,
   type Spacecraft,
   type ExoticObject,
+  type CosmicLandmark,
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
-import { starScenePosition } from "@/astrometry/positions";
+import {
+  starEpochYears,
+  starScenePositionAtEpoch,
+} from "@/astrometry/properMotion";
 import { GltfWithFallback, preloadNasaModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { NASA_GLTF } from "@/data/nasaModels";
 import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
 import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { MissionRoute } from "@/components/MissionRoute";
 import { MissionFlight } from "@/components/MissionFlight";
 import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
@@ -75,36 +82,46 @@ const frameDistanceFor = (reach: number) =>
 
 // Live scene position of any focusable body (Sun / planet / star), so the
 // camera can fly to it and keep tracking it as it orbits.
-const starScenePos = (s: StarPOI): THREE.Vector3 =>
-  new THREE.Vector3(...starScenePosition(s.distance, s.dir));
+const starScenePos = (s: StarPOI, epochYears: number): THREE.Vector3 =>
+  new THREE.Vector3(...starScenePositionAtEpoch(s.distance, s.dir, s.name, epochYears));
 
-const bodyScenePos = (name: string, years: number): THREE.Vector3 => {
+const bodyScenePos = (
+  name: string,
+  clockYears: number,
+  scrubYears: number | null,
+  lifeYears: number,
+): THREE.Vector3 => {
+  const epoch = starEpochYears(clockYears, scrubYears, lifeYears);
   if (name === "__light__" || name === "Sun") return new THREE.Vector3(0, 0, 0);
   const p = PLANETS.find((b) => b.name === name);
   if (p) {
-    const [x, y, z] = toScenePosition(heliocentricAU(p, years));
+    const [x, y, z] = toScenePosition(heliocentricAU(p, clockYears));
     return new THREE.Vector3(x, y, z);
   }
   const c = COMETS.find((b) => b.name === name);
   if (c) {
-    const [x, y, z] = toScenePosition(heliocentricAU(c, years));
+    const [x, y, z] = toScenePosition(heliocentricAU(c, clockYears));
     return new THREE.Vector3(x, y, z);
   }
   if (name === ROADSTER.name) {
-    const [x, y, z] = toScenePosition(heliocentricAU(ROADSTER, years));
+    const [x, y, z] = toScenePosition(heliocentricAU(ROADSTER, clockYears));
     return new THREE.Vector3(x, y, z);
   }
   const s = NEARBY_STARS.find((b) => b.name === name);
-  if (s) return starScenePos(s);
+  if (s) return starScenePos(s, epoch);
   const bh = BLACK_HOLES.find((b) => b.name === name);
   if (bh) return new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY));
+  const landmark = COSMIC_LANDMARKS.find((b) => b.name === name);
+  if (landmark) {
+    return new THREE.Vector3(...landmark.dir).normalize().multiplyScalar(scaleDistanceAU(landmark.sceneDistanceLy * AU_PER_LY));
+  }
   const e = EXOPLANETS.find((b) => b.name === name);
   if (e) {
     const host = NEARBY_STARS.find((b) => b.name === e.host);
-    if (host) return starScenePos(host);
+    if (host) return starScenePos(host, epoch);
   }
   const cat = STAR_CATALOG.find((b) => b.name === name);
-  if (cat) return new THREE.Vector3(...starScenePosition(cat.ly, cat.pos));
+  if (cat) return new THREE.Vector3(...starScenePositionAtEpoch(cat.ly, cat.pos, cat.name, epoch));
   const sc = SPACECRAFT.find((b) => b.name === name);
   if (sc) {
     if (sc.orbit === "earth") {
@@ -132,6 +149,7 @@ const bodyFrameDist = (name: string, reach: number): number => {
   if (BLACK_HOLES.some((b) => b.name === name)) return 120;
   const catStar = STAR_CATALOG.find((b) => b.name === name);
   if (catStar) return stellarFrameDistance(catalogStarRender(catStar).size);
+  if (COSMIC_LANDMARKS.some((b) => b.name === name)) return 180;
   if (SPACECRAFT.some((b) => b.name === name)) return 6;
   if (EXOTIC_OBJECTS.some((b) => b.name === name)) return 90;
   return 80;
@@ -194,16 +212,33 @@ const StarSurface = ({
   );
 };
 
-// Lighter scene on phones (fewer decorative particles, lower pixel ratio).
-const IS_MOBILE = typeof window !== "undefined" && window.matchMedia?.("(max-width: 768px)").matches;
 const REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // Jump destinations for the Explore menu (far things you can't easily click).
 const EXPLORE_GROUPS: { label: string; items: string[] }[] = [
   { label: "Spacecraft", items: [ROADSTER.name, ...SPACECRAFT.map((s) => s.name)] },
   { label: "Comets", items: COMETS.map((c) => c.name) },
-  { label: "Bright stars", items: ["Sirius", "Vega", "Arcturus", "Aldebaran", "Betelgeuse", "Antares"] },
+  {
+    label: "Bright stars",
+    items: [
+      "Sirius",
+      "Vega",
+      "Arcturus",
+      "Aldebaran",
+      "Betelgeuse",
+      "Antares",
+      "Rigel",
+      "Deneb",
+      "Canopus",
+      "Polaris",
+      "Bellatrix",
+      "Mintaka",
+      "Alnilam",
+      "Alnitak",
+    ],
+  },
   { label: "Exotic objects", items: EXOTIC_OBJECTS.map((o) => o.name) },
+  { label: "Beyond the neighborhood", items: COSMIC_LANDMARKS.map((l) => l.name) },
   { label: "Black holes", items: BLACK_HOLES.map((b) => b.name) },
 ];
 
@@ -981,37 +1016,55 @@ const ExoticBody = ({ obj, onFocus }: { obj: ExoticObject; onFocus: (name: strin
 /* --------------------- catalog stars (the real ~300) ---------------------- */
 // Rendered as a single InstancedMesh for performance; hover shows one label,
 // click opens the detail panel. Featured stars are excluded to avoid dupes.
-const CatalogStars = ({ onFocus }: { onFocus: (name: string) => void }) => {
+const CatalogStars = ({
+  onFocus,
+  clock,
+  scrubYears,
+  lightYears,
+}: {
+  onFocus: (name: string) => void;
+  clock: React.MutableRefObject<SimClock>;
+  scrubYears: number | null;
+  lightYears: number;
+}) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const hoverGroupRef = useRef<THREE.Group>(null);
   const list = useMemo(() => {
     const featured = new Set(NEARBY_STARS.map((s) => s.name.toLowerCase()));
     return STAR_CATALOG.filter((s) => !featured.has(s.name.toLowerCase()));
   }, []);
+  const sizes = useMemo(() => list.map((s) => catalogStarRender(s).size), [list]);
   const [hover, setHover] = useState(-1);
 
   useLayoutEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    const m = new THREE.Matrix4();
     const col = new THREE.Color();
-    list.forEach((s, i) => {
-      const [px, py, pz] = starScenePosition(s.ly, s.pos);
-      const p = new THREE.Vector3(px, py, pz);
-      const size = catalogStarRender(s).size;
-      m.makeScale(size, size, size);
-      m.setPosition(p.x, p.y, p.z);
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, col.set(s.color));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
+    list.forEach((s, i) => mesh.setColorAt(i, col.set(s.color)));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [list]);
 
+  useFrame(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const epoch = starEpochYears(clock.current.years, scrubYears, lightYears);
+    const m = new THREE.Matrix4();
+    list.forEach((s, i) => {
+      const [px, py, pz] = starScenePositionAtEpoch(s.ly, s.pos, s.name, epoch);
+      m.makeScale(sizes[i], sizes[i], sizes[i]);
+      m.setPosition(px, py, pz);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+
+    if (hover >= 0 && hoverGroupRef.current) {
+      const s = list[hover];
+      const [px, py, pz] = starScenePositionAtEpoch(s.ly, s.pos, s.name, epoch);
+      hoverGroupRef.current.position.set(px, py, pz);
+    }
+  });
+
   const hoverStar = hover >= 0 ? list[hover] : null;
-  const hoverPos = useMemo(
-    () => (hoverStar ? new THREE.Vector3(...starScenePosition(hoverStar.ly, hoverStar.pos)) : null),
-    [hover] // eslint-disable-line react-hooks/exhaustive-deps
-  );
 
   return (
     <>
@@ -1025,10 +1078,12 @@ const CatalogStars = ({ onFocus }: { onFocus: (name: string) => void }) => {
         <sphereGeometry args={[1, 24, 24]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
-      {hoverStar && hoverPos && (
-        <Html position={hoverPos.toArray()} center distanceFactor={200} className="ss-label">
-          <span className="ss-name ss-star" style={{ color: hoverStar.color }}>{hoverStar.name} · {hoverStar.ly} ly</span>
-        </Html>
+      {hoverStar && (
+        <group ref={hoverGroupRef}>
+          <Html center distanceFactor={200} className="ss-label">
+            <span className="ss-name ss-star" style={{ color: hoverStar.color }}>{hoverStar.name} · {hoverStar.ly} ly</span>
+          </Html>
+        </group>
       )}
     </>
   );
@@ -1039,11 +1094,13 @@ const NearbyStars = ({
   lightYears,
   onFocus,
   clock,
+  scrubYears,
   showMinor,
   focusName,
   destinationName,
 }: {
   lightYears: number;
+  scrubYears: number | null;
   onFocus: (name: string) => void;
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
@@ -1053,19 +1110,30 @@ const NearbyStars = ({
   const placed = useMemo(
     () =>
       NEARBY_STARS.map((s) => {
-        const [px, py, pz] = starScenePosition(s.distance, s.dir);
         const render = featuredStarRender(s);
-        return { star: s, p: new THREE.Vector3(px, py, pz), size: render.size, glow: render.glow };
+        return { star: s, size: render.size, glow: render.glow };
       }),
     []
   );
+  const groupRefs = useRef<(THREE.Group | null)[]>([]);
+
+  useFrame(() => {
+    const epoch = starEpochYears(clock.current.years, scrubYears, lightYears);
+    placed.forEach(({ star }, i) => {
+      const g = groupRefs.current[i];
+      if (!g) return;
+      const [px, py, pz] = starScenePositionAtEpoch(star.distance, star.dir, star.name, epoch);
+      g.position.set(px, py, pz);
+    });
+  });
+
   return (
     <group>
-      {placed.map(({ star, p, size, glow }) => {
+      {placed.map(({ star, size, glow }, i) => {
         const reached = star.distance <= lightYears;
         const isDest = destinationName === star.name;
         return (
-          <group key={star.name} position={p.toArray()}>
+          <group key={star.name} ref={(el) => { groupRefs.current[i] = el; }}>
             {/* animated plasma photosphere (unlit — stars emit their own light) */}
             <StarSurface
               color={star.color}
@@ -1179,11 +1247,13 @@ const CameraDirector = ({
   goal,
   reach,
   clock,
+  scrubYears,
   controlsRef,
 }: {
   goal: { name: string; token: number } | null;
   reach: number;
   clock: React.MutableRefObject<SimClock>;
+  scrubYears: number | null;
   controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
 }) => {
   const { camera } = useThree();
@@ -1214,7 +1284,7 @@ const CameraDirector = ({
     }
     if (s.phase === "idle") return;
 
-    const targetNow = bodyScenePos(s.name, clock.current.years);
+    const targetNow = bodyScenePos(s.name, clock.current.years, scrubYears, reach);
 
     if (s.phase === "fly") {
       if (s.t0 === null) s.t0 = state.clock.getElapsedTime();
@@ -1369,6 +1439,73 @@ const Heliosphere = () => {
   );
 };
 
+/** Schematic Local Bubble — low-density interstellar cavity (not to measured scale). */
+const LocalBubble = () => {
+  const r = scaleDistanceAU(LOCAL_BUBBLE.radiusLy * AU_PER_LY);
+  return (
+    <group>
+      <mesh scale={[1.05, 0.88, 1.18]}>
+        <sphereGeometry args={[r, 40, 40]} />
+        <meshBasicMaterial color="#8b6fd4" transparent opacity={0.018} side={THREE.BackSide} depthWrite={false} />
+      </mesh>
+      <Html position={[0, r * 0.55, r * 0.35]} center distanceFactor={280} className="ss-label">
+        <span className="ss-name ss-helio" style={{ opacity: 0.7 }}>Local Bubble (schematic)</span>
+      </Html>
+    </group>
+  );
+};
+
+const CosmicLandmarkBody = ({
+  landmark,
+  onFocus,
+}: {
+  landmark: CosmicLandmark;
+  onFocus: (name: string) => void;
+}) => {
+  const p = useMemo(
+    () => new THREE.Vector3(...landmark.dir).normalize().multiplyScalar(scaleDistanceAU(landmark.sceneDistanceLy * AU_PER_LY)),
+    [landmark]
+  );
+  const core = landmark.kind === "galactic_center" ? 22 : landmark.kind === "galaxy" ? 28 : 18;
+  return (
+    <group position={p.toArray()}>
+      <mesh
+        onClick={(e) => { e.stopPropagation(); onFocus(landmark.name); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+        onPointerOut={() => { document.body.style.cursor = "auto"; }}
+      >
+        <sphereGeometry args={[core, 32, 32]} />
+        <meshBasicMaterial color={landmark.color} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[core * 2.6, 24, 24]} />
+        <meshBasicMaterial color={landmark.color} transparent opacity={0.14} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {landmark.kind === "galaxy" && (
+        <mesh rotation={[Math.PI / 2.8, 0.4, 0.15]}>
+          <ringGeometry args={[core * 1.6, core * 5.5, 64]} />
+          <meshBasicMaterial color={landmark.color} transparent opacity={0.22} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
+      {landmark.kind === "galactic_center" && (
+        <mesh rotation={[Math.PI / 2.2, 0, 0.5]}>
+          <ringGeometry args={[core * 1.2, core * 4.2, 56]} />
+          <meshBasicMaterial color="#ffae5a" transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
+      <Html position={[0, core * 3.5, 0]} center distanceFactor={360} className="ss-label">
+        <button
+          onClick={() => onFocus(landmark.name)}
+          className="ss-name"
+          style={{ color: landmark.color, pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+        >
+          {landmark.name}
+        </button>
+      </Html>
+    </group>
+  );
+};
+
 const EclipticGrid = () => (
   <gridHelper args={[scaleDistanceAU(200) * 2, 48, "#1c2546", "#141b35"]} />
 );
@@ -1380,6 +1517,7 @@ const Scene = ({
   showMinor,
   setShowMinor,
   lightYears,
+  scrubYears,
   displayLY,
   animatingLight,
   setAnimatingLight,
@@ -1394,12 +1532,17 @@ const Scene = ({
   missionFlying,
   missionMode,
   missionOrigin,
+  isMobile,
+  missionHudActive,
 }: {
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
   setShowMinor: (v: boolean) => void;
   lightYears: number;
+  scrubYears: number | null;
   displayLY: number;
+  isMobile: boolean;
+  missionHudActive: boolean;
   animatingLight: boolean;
   setAnimatingLight: (v: boolean) => void;
   flying: boolean;
@@ -1417,8 +1560,8 @@ const Scene = ({
   <>
     <ambientLight intensity={0.25} />
     {/* layered, denser, faintly-coloured starfield — more wonder */}
-    <Stars radius={4000} depth={600} count={IS_MOBILE ? 6000 : 16000} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
-    <Stars radius={9000} depth={200} count={IS_MOBILE ? 3000 : 7000} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
+    <Stars radius={4000} depth={600} count={isMobile ? 5000 : 16000} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
+    <Stars radius={9000} depth={200} count={isMobile ? 2500 : 7000} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
     <TimeKeeper clock={clock} onZoom={setShowMinor} />
 
     <EclipticGrid />
@@ -1444,10 +1587,14 @@ const Scene = ({
     {EXOTIC_OBJECTS.map((o) => (
       <ExoticBody key={o.name} obj={o} onFocus={onFocus} />
     ))}
+    {COSMIC_LANDMARKS.map((l) => (
+      <CosmicLandmarkBody key={l.name} landmark={l} onFocus={onFocus} />
+    ))}
 
     <Belt {...ASTEROID_BELT} color="#8c8170" size={0.18} meanPeriodYears={4.6} clock={clock} />
     <Belt {...KUIPER_BELT} color="#7f93b8" size={0.22} meanPeriodYears={285} clock={clock} />
     <Heliosphere />
+    <LocalBubble />
     <OortCloud />
 
     {missionResult && destination ? (
@@ -1464,9 +1611,10 @@ const Scene = ({
     ) : (
       <MissionRoute destination={destination} />
     )}
-    <CatalogStars onFocus={onFocus} />
+    <CatalogStars onFocus={onFocus} clock={clock} scrubYears={scrubYears} lightYears={lightYears} />
     <NearbyStars
       lightYears={displayLY}
+      scrubYears={scrubYears}
       onFocus={onFocus}
       clock={clock}
       showMinor={showMinor}
@@ -1480,21 +1628,22 @@ const Scene = ({
     <LightSphere lightYears={displayLY} animating={animatingLight} onDone={() => setAnimatingLight(false)} />
 
     <FlythroughCamera active={flying && !missionFlying} radius={lightYears > 0 ? scaleDistanceAU(lightYears * AU_PER_LY) : 120} controlsRef={controlsRef} />
-    <CameraDirector goal={goal} reach={lightYears} clock={clock} controlsRef={controlsRef} />
+    <CameraDirector goal={goal} reach={lightYears} clock={clock} scrubYears={scrubYears} controlsRef={controlsRef} />
     <OrbitControls
       ref={controlsRef}
       makeDefault
       enablePan
-      zoomToCursor
+      zoomToCursor={!isMobile}
       screenSpacePanning
       enableDamping
       dampingFactor={0.09}
       enabled={!flying && !missionFlying}
       minDistance={0.4}
       maxDistance={MAX_ZOOM}
-      zoomSpeed={0.55}
-      panSpeed={1.0}
-      rotateSpeed={0.55}
+      zoomSpeed={isMobile ? 0.85 : 0.55}
+      panSpeed={isMobile ? 0.65 : 1.0}
+      rotateSpeed={isMobile ? 0.45 : 0.55}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   </>
 );
@@ -1545,6 +1694,8 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     const [showMinor, setShowMinor] = useState(false);
     const [speed, setSpeed] = useState(0.1);
     const [scrubYears, setScrubYears] = useState<number | null>(null); // timeline scrubber
+    const isMobile = useIsMobile();
+    const missionHudActive = !!(missionResult && destination);
     const [paused, setPaused] = useState(false);
     const [animatingLight, setAnimatingLight] = useState(false);
     const [flying, setFlying] = useState(false);
@@ -1642,10 +1793,10 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     };
 
     return (
-      <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-[#04050c]">
+      <div ref={containerRef} className="relative h-full w-full touch-none overflow-hidden bg-[#04050c]">
         <Canvas
-          camera={{ position: [70, 46, 70], fov: CAMERA_FOV, near: 0.02, far: 60_000 }}
-          dpr={[1, IS_MOBILE ? 1.5 : 2]}
+          camera={{ position: [70, 46, 70], fov: isMobile ? 60 : CAMERA_FOV, near: 0.02, far: 60_000 }}
+          dpr={[1, isMobile ? 1.25 : 2]}
           gl={{ preserveDrawingBuffer: true }}
           onCreated={({ gl, scene, camera }) => {
             glRef.current = gl;
@@ -1659,6 +1810,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             showMinor={showMinor}
             setShowMinor={setShowMinor}
             lightYears={lightYears}
+            scrubYears={scrubYears}
             displayLY={displayLY}
             animatingLight={animatingLight}
             setAnimatingLight={setAnimatingLight}
@@ -1673,12 +1825,14 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             missionFlying={missionFlying}
             missionMode={missionMode}
             missionOrigin={missionOrigin}
+            isMobile={isMobile}
+            missionHudActive={missionHudActive}
           />
         </Canvas>
 
         {/* HUD */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full glass px-3 py-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-4">
+          <div className="pointer-events-auto flex min-h-11 items-center gap-2 self-stretch rounded-full glass px-3 py-2 md:self-auto">
             <button onClick={togglePause} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
               {paused ? "Play" : "Pause"}
             </button>
@@ -1691,12 +1845,12 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               step={0.1}
               value={speed}
               onChange={(e) => setSpeedVal(parseFloat(e.target.value))}
-              className="h-1 w-24 cursor-pointer accent-primary"
+              className="h-1 min-w-0 flex-1 cursor-pointer accent-primary md:w-24 md:flex-none"
             />
-            <span className="font-mono-num tnum w-10 text-xs text-primary">{speed.toFixed(1)}×</span>
+            <span className="font-mono-num tnum w-10 shrink-0 text-xs text-primary">{speed.toFixed(1)}×</span>
           </div>
 
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full glass px-2.5 py-2">
+          <div className="pointer-events-auto flex min-h-11 items-center gap-1.5 overflow-x-auto rounded-full glass px-2 py-2 md:gap-2 md:px-2.5">
             <button
               onClick={toggleFullscreen}
               title={isFs ? "Exit full screen" : "Full screen"}
@@ -1714,7 +1868,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                 Explore
               </button>
               {exploreOpen && (
-                <div className="absolute bottom-full right-0 mb-3 w-52 rounded-2xl glass p-2 text-left">
+                <div className="absolute bottom-full right-0 z-50 mb-3 max-h-[min(50dvh,320px)] w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl glass p-2 text-left">
                   {EXPLORE_GROUPS.map((g) => (
                     <div key={g.label} className="mb-1 last:mb-0">
                       <p className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/60">{g.label}</p>
@@ -1754,10 +1908,10 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                 >
                   Zoom to my light
                 </button>
-                <button onClick={() => setFlying((v) => !v)} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+                <button onClick={() => setFlying((v) => !v)} className="hidden rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary sm:inline-block">
                   {flying ? "Stop" : "Flythrough"}
                 </button>
-                <button onClick={exportPNG} title="Save frame as PNG" className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+                <button onClick={exportPNG} title="Save frame as PNG" className="hidden rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary sm:inline-block">
                   Save
                 </button>
               </>
@@ -1767,11 +1921,20 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
 
         {/* Timeline scrubber — drag across your life; watch the light expand/retract */}
         {lightYears > 0 && (
-          <div className="pointer-events-auto absolute bottom-[4.75rem] left-1/2 w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl glass px-4 py-2.5">
-            <div className="mb-1.5 flex items-center justify-between text-[11px]">
+          <div
+            className={`pointer-events-auto absolute left-1/2 w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl glass px-3 py-2.5 md:px-4 ${
+              missionHudActive
+                ? "bottom-[calc(11.5rem+env(safe-area-inset-bottom,0px))] md:bottom-[4.75rem]"
+                : "bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:bottom-[4.75rem]"
+            }`}
+          >
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
               <span className="text-muted-foreground">Your light through the years</span>
-              <span className="font-mono-num tnum text-beam">{displayLY.toFixed(1)} ly · age {Math.round(scrubYears ?? lightYears)}</span>
+              <span className="font-mono-num tnum shrink-0 text-beam">{displayLY.toFixed(1)} ly · age {Math.round(scrubYears ?? lightYears)}</span>
             </div>
+            <p className="mb-1.5 hidden text-center text-[10px] text-muted-foreground/70 sm:block">
+              Scrubbing also nudges star positions (proper motion). Run the sim to watch planets and stars drift together.
+            </p>
             <input
               type="range"
               min={0}
@@ -1799,7 +1962,13 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
 
         {/* Detail panel (on click) replaces the info chip; falls back to hints. */}
         {detail ? (
-          <div className="pointer-events-auto absolute left-4 top-4 w-[min(20rem,calc(100%-2rem))] rounded-2xl glass p-4">
+          <div
+            className={`pointer-events-auto absolute left-3 right-3 top-auto max-h-[min(38dvh,20rem)] w-auto overflow-y-auto rounded-2xl glass p-4 md:left-4 md:right-auto md:top-4 md:max-h-none md:w-[min(20rem,calc(100%-2rem))] md:overflow-visible md:bottom-auto ${
+              missionHudActive
+                ? "bottom-[calc(12rem+env(safe-area-inset-bottom,0px))] md:bottom-auto"
+                : "bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))]"
+            }`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-display text-base font-semibold text-foreground">{detail.name}</h3>
@@ -1824,10 +1993,18 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                     </p>
                   ) : null;
                 })()}
+                {detail.lightTravelNote && (
+                  <p className="mt-1.5 border-t border-beam/15 pt-1.5 text-[10px] leading-snug text-muted-foreground">
+                    {detail.lightTravelNote}
+                  </p>
+                )}
               </div>
             )}
             <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">{detail.blurb}</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            {detail.scienceNote && (
+              <p className="mt-2 text-[10px] leading-snug text-muted-foreground/80">{detail.scienceNote}</p>
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {detail.stats.map((s) => (
                 <div key={s.label} className="rounded-lg bg-white/[0.03] px-2 py-1.5">
                   <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{s.label}</p>
@@ -1852,18 +2029,22 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             </div>
           </div>
         ) : (
-          <div className="pointer-events-none absolute left-4 top-4 max-w-[13rem] rounded-xl glass px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+          <div className="pointer-events-none absolute left-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] max-w-[11rem] rounded-xl glass px-3 py-2 text-[10px] leading-snug text-muted-foreground md:left-4 md:top-4 md:max-w-[13rem] md:text-[11px]">
             {focusName ? (
               <span>
-                Focused on <span className="font-medium text-foreground">{focusName}</span>. Drag to
-                orbit · scroll to zoom · click any body for details.
+                Focused on <span className="font-medium text-foreground">{focusName}</span>.
+                {isMobile ? " Pinch to zoom · tap for details." : " Drag to orbit · scroll to zoom · click any body for details."}
               </span>
             ) : (
-              <span>Real orbits · true-scale between stars. Click any body for details, or scroll to zoom.</span>
+              <span>
+                {isMobile
+                  ? "Pinch to zoom · one finger to orbit · tap any body for details."
+                  : "Real orbits · the light sphere is a one-way travel metaphor. Click any body for details, or scroll to zoom."}
+              </span>
             )}
           </div>
         )}
-        <div className="pointer-events-none absolute right-4 top-4 rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground">
+        <div className="pointer-events-none absolute right-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] hidden rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground sm:block md:right-4 md:top-4">
           {showMinor ? "moons + dwarfs visible" : "zoom in for moons & dwarfs"}
         </div>
       </div>

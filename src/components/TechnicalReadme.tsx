@@ -53,6 +53,25 @@ distance_km = lightYears × (c × 8,766 h) // lightYears × 9.4607e12 km`}</Code
               <C>1,079,252,848.8 km/h</C>).
             </Section>
 
+            <Section title="## The light sphere (metaphor, not physics)">
+              The expanding sphere in the 3D view marks how far a{" "}
+              <em>hypothetical beam from your birth-date</em> would have traveled —
+              one way, at <C>c</C>. It is a teaching metaphor, not a physical
+              shockwave lighting up space. When the surface crosses a star, that means
+              your birth-light has covered that many light-years; it does <em>not</em>{" "}
+              mean the star is illuminated or that starlight reaching Earth tonight left
+              at the same moment.
+            </Section>
+
+            <Section title="## How we know star distances (parallax)">
+              Featured and catalog stars show an annual parallax in milliarcseconds
+              (mas). Astronomers measure the tiny shift in a star's apparent position
+              when Earth is on opposite sides of its orbit (baseline ≈ 2 AU). Inversely:
+              <Code>{`π (mas) ≈ 3261.56 / distance_ly`}</Code>
+              Closer stars have larger parallax; farther stars barely shift. Hipparcos
+              and Gaia refined this for hundreds of thousands of stars.
+            </Section>
+
             <Section title="## Orbits around the Sun">
               The "orbits" figure reframes that same path length as loops of Earth's
               orbit. One lap of a circle at 1 AU has circumference{" "}
@@ -105,13 +124,36 @@ gravity_assist  → Jupiter (+9.2 km/s) + Saturn (+4.8 km/s) flybys,
               the route animation on load.
             </Section>
 
+            <Section title="## Proper motion (time-dependent sky)">
+              Named stars carry annual proper motion (mas/yr) from Gaia/Hipparcos. Each
+              frame, directions are updated from J2000 by integrating RA and Dec shifts
+              over the simulation epoch. Running the sim advances planets and stars
+              together; scrubbing your life timeline adds a small epoch offset so the
+              sky rewinds with your birthday slider. Stars without measured PM stay fixed.
+            </Section>
+
+            <Section title="## Local Bubble & interstellar neighborhood">
+              A faint purple shell marks the schematic Local Bubble (~250 ly) — the
+              low-density cavity the Sun sits inside, likely blown by ancient supernovae.
+              It is illustrative, not a surveyed boundary. Beyond the heliopause (blue
+              shells) lies the local interstellar medium of gas and dust between stars.
+            </Section>
+
+            <Section title="## Cosmic landmarks">
+              Andromeda, the Magellanic Clouds, Triangulum, and the Galactic Center appear
+              at compressed scene distances near the map edge so you can navigate to them.
+              True distances (thousands to millions of ly) are shown in each detail panel.
+              They are orientation anchors, not proportional neighbours of Proxima Centauri.
+            </Section>
+
             <Section title="## Assumptions & simplifications">
               <ul className="ml-4 list-disc space-y-1">
                 <li>Moon cadence is slowed to a calm, watchable rate (wonder over exact periods).</li>
                 <li>Belts rotate as a group rather than each rock on its own orbit.</li>
                 <li>Star & body sizes are exaggerated for visibility; distances are compressed.</li>
                 <li>Light travels in a straight line at c; gravity/relativity are ignored for the birthday beam.</li>
-                <li>Mission routes are straight-line heliocentric estimates — no full n-body astrodynamics.</li>
+                <li>No cosmic expansion, gravitational lensing, or aberration — Newtonian solar system + static distances for galaxies.</li>
+                <li>Mission routes use J2000 star directions — proper motion during a trip is not integrated.</li>
                 <li>Leap years optional (365.25 vs 365 days/yr toggle).</li>
               </ul>
             </Section>

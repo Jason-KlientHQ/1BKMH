@@ -10,6 +10,10 @@
    ============================================================ */
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   :root {
     /* Deep space, faintly blue. Not pure black. */
     --background: 234 44% 4%;

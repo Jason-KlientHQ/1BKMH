@@ -3,7 +3,16 @@
  * measurements. Featured nearby stars use curated values where known.
  */
 
-/** Curated masses (M☉) for the 30 featured nearby stars. */
+export type StellarLifeStage =
+  | "Main sequence"
+  | "Subgiant"
+  | "Red giant"
+  | "Blue giant"
+  | "Red supergiant"
+  | "Blue supergiant"
+  | "White dwarf";
+
+/** Curated masses (M☉) for featured nearby stars. */
 export const FEATURED_STAR_MASS: Record<string, number> = {
   "Proxima Centauri": 0.12,
   "Alpha Centauri": 1.1,
@@ -35,9 +44,27 @@ export const FEATURED_STAR_MASS: Record<string, number> = {
   "Zeta Reticuli": 0.99,
   Capella: 2.57,
   Aldebaran: 1.16,
+  Betelgeuse: 16,
+  Antares: 12,
+  Rigel: 21,
+  Deneb: 19,
+  Canopus: 8,
+  Polaris: 5,
+  Bellatrix: 8.6,
+  Alnitak: 33,
+  Alnilam: 32,
+  Mintaka: 24,
+  "TRAPPIST-1": 0.09,
+  "Epsilon Indi": 0.76,
+  "LHS 1140": 0.15,
+  "55 Cancri": 0.91,
+  Castor: 2.76,
+  Regulus: 3.8,
+  Spica: 11,
 };
 
 const GIANT_RE = /I[ab]?|II|III|IV/i;
+const SUPERGIANT_RE = /Ia|Iab|Ib/i;
 const WHITE_DWARF_RE = /^D[ABCOZ]/i;
 
 export function isGiantSpectral(spectral: string): boolean {
@@ -46,6 +73,68 @@ export function isGiantSpectral(spectral: string): boolean {
 
 export function isWhiteDwarfSpectral(spectral: string): boolean {
   return WHITE_DWARF_RE.test(spectral);
+}
+
+/** Annual parallax (mas) from distance in light-years: π ≈ 3261.56 / d_ly. */
+export function parallaxMas(distanceLy: number): number {
+  if (distanceLy <= 0) return 0;
+  return 3261.56 / distanceLy;
+}
+
+/** Human-readable parallax explainer for detail panels. */
+export function parallaxExplainer(distanceLy: number): string {
+  const mas = parallaxMas(distanceLy);
+  return `Parallax ${mas.toFixed(2)} mas — the tiny angle shift astronomers measure from opposite sides of Earth's orbit to estimate distance.`;
+}
+
+const spectralClass = (spectral: string) => spectral.trim().charAt(0).toUpperCase();
+
+/**
+ * Classify a star's evolutionary stage from spectral type and radius.
+ * Used for education labels — not a full stellar-evolution model.
+ */
+export function stellarLifeStage(spectral: string, radiusSolar: number): StellarLifeStage {
+  if (isWhiteDwarfSpectral(spectral)) return "White dwarf";
+
+  const r = Math.max(radiusSolar, 0.01);
+  const cls = spectralClass(spectral);
+  const isSuper =
+    SUPERGIANT_RE.test(spectral) || (GIANT_RE.test(spectral) && r >= 50);
+
+  if (isSuper) {
+    if (cls === "O" || cls === "B" || cls === "A" || cls === "F") return "Blue supergiant";
+    return "Red supergiant";
+  }
+
+  if (GIANT_RE.test(spectral) || r >= 10) {
+    if (cls === "O" || cls === "B") return "Blue giant";
+    return "Red giant";
+  }
+
+  if (/IV/i.test(spectral)) return "Subgiant";
+  return "Main sequence";
+}
+
+/** One-line consequence of a life stage for detail panels. */
+export function lifeStageNote(stage: StellarLifeStage, radiusSolar: number): string | null {
+  switch (stage) {
+    case "Red supergiant":
+      return radiusSolar >= 100
+        ? "A bloated, dying star likely to end in a supernova."
+        : "An aging giant nearing the end of its life.";
+    case "Blue supergiant":
+      return "A massive, short-lived star burning fuel at a furious rate.";
+    case "Red giant":
+      return "A swollen, cooler star fusing helium in its core.";
+    case "Blue giant":
+      return "A hot, luminous star much larger and brighter than the Sun.";
+    case "Subgiant":
+      return "A star leaving the main sequence, beginning to expand.";
+    case "White dwarf":
+      return "The dense remnant core of a dead Sun-like star.";
+    default:
+      return null;
+  }
 }
 
 /**

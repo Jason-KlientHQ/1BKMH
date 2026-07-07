@@ -1,8 +1,14 @@
-import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER, SPACECRAFT, EXOTIC_OBJECTS } from "@/data/solarSystem";
+import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER, SPACECRAFT, EXOTIC_OBJECTS, COSMIC_LANDMARKS, LOCAL_BUBBLE } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 
 import { SEC_PER_AU, SEC_PER_LY } from "@/lib/constants"; // derived from c = 1,079,252,848.8 km/h
-import { resolveMassSolar } from "@/stellar/physics";
+import {
+  lifeStageNote,
+  parallaxExplainer,
+  parallaxMas,
+  resolveMassSolar,
+  stellarLifeStage,
+} from "@/stellar/physics";
 
 /* ----------------------------- source links ------------------------------ */
 // Sources: Grokipedia (primary) → NASA. Wikipedia is not used.
@@ -17,7 +23,23 @@ export interface BodyDetail {
   stats: { label: string; value: string }[];
   lightSeconds: number; // one-way light-travel time from the Sun (0 = the Sun)
   links: { grokipedia: string; nasa: string };
+  /** Clarifies the growing light sphere is a one-way travel metaphor. */
+  lightTravelNote?: string;
+  /** Educational note on parallax or life stage. */
+  scienceNote?: string;
 }
+
+/** Shown on star detail panels — separates birth-light reach from starlight to Earth. */
+export function starLightTravelNote(distanceLy: number): string {
+  return (
+    `The growing sphere marks how far a beam from your birth-date has traveled — one way. ` +
+    `It is a metaphor, not a physical shockwave. Starlight we see from this star tonight ` +
+    `left it about ${distanceLy.toLocaleString("en-US")} years ago.`
+  );
+}
+
+export const LIGHT_SPHERE_METAPHOR =
+  "The expanding sphere is a metaphor for one-way light travel since your birthday — not a physical wave lighting up space.";
 
 /** "Your light arrived on ___" — the moment the person's light reached a body. */
 export function formatArrival(birthISO: string, lightSeconds: number): string | null {
@@ -102,6 +124,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
         { label: "Age", value: "4.6 billion yr" },
       ],
       lightSeconds: 0,
+      scienceNote: `Beyond the heliopause lies the local interstellar medium. ${LOCAL_BUBBLE.desc}`,
       links,
     };
   }
@@ -142,16 +165,22 @@ export function getBodyInfo(name: string): BodyDetail | null {
   const s = NEARBY_STARS.find((b) => b.name === name);
   if (s) {
     const mass = resolveMassSolar(name, s.radiusSolar, s.spectral);
+    const stage = stellarLifeStage(s.spectral, s.radiusSolar);
+    const stageNote = lifeStageNote(stage, s.radiusSolar);
     return {
       name,
-      type: s.spectral,
+      type: `${stage} · ${s.spectral}`,
       blurb: s.desc,
       stats: [
         { label: "Distance", value: `${s.distance} ly` },
+        { label: "Life stage", value: stage },
+        { label: "Parallax", value: `${parallaxMas(s.distance).toFixed(2)} mas` },
         { label: "Radius", value: `${s.radiusSolar.toFixed(2)} R☉` },
         { label: "Mass", value: `${mass.toFixed(2)} M☉` },
       ],
       lightSeconds: s.distance * SEC_PER_LY,
+      lightTravelNote: starLightTravelNote(s.distance),
+      scienceNote: [parallaxExplainer(s.distance), stageNote, "Position drifts with simulation time (proper motion)."].filter(Boolean).join(" "),
       links,
     };
   }
@@ -192,6 +221,20 @@ export function getBodyInfo(name: string): BodyDetail | null {
       blurb: sc.desc,
       stats,
       lightSeconds: (sc.orbit === "earth" ? earthAU : sc.distanceAU!) * SEC_PER_AU,
+      links,
+    };
+  }
+
+  const landmark = COSMIC_LANDMARKS.find((b) => b.name === name);
+  if (landmark) {
+    return {
+      name,
+      type: landmark.typeLabel,
+      blurb: landmark.desc,
+      stats: landmark.stats,
+      lightSeconds: landmark.distanceLy * SEC_PER_LY,
+      scienceNote:
+        "Position on the map is compressed for navigation — true distance shown in stats. Cosmic expansion and relativistic effects are not simulated.",
       links,
     };
   }
@@ -242,20 +285,27 @@ export function getBodyInfo(name: string): BodyDetail | null {
 
   const cat = STAR_CATALOG.find((b) => b.name === name);
   if (cat) {
-    const isGiant = cat.r >= 10;
     const mass = resolveMassSolar(cat.name, cat.r, cat.spect);
+    const stage = stellarLifeStage(cat.spect, cat.r);
+    const stageNote = lifeStageNote(stage, cat.r);
     const kind = /^(HD|HIP|Gliese)/.test(cat.name) ? "Catalog star" : "Star";
-    const sizeNote = cat.r >= 100 ? " (supergiant)" : cat.r >= 10 ? " (giant)" : "";
+    const isGiant = cat.r >= 10;
+    const sizePhrase = cat.r >= 100 ? "supergiant" : isGiant ? "giant" : "star";
+    const magNote = cat.mag < 3 ? ` — magnitude ${cat.mag.toFixed(2)}, bright enough to see without a telescope` : "";
     return {
       name,
-      type: (cat.spect !== "—" ? `${kind} · ${cat.spect}` : kind) + sizeNote,
-      blurb: `${isGiant ? `A ${cat.r >= 100 ? "supergiant" : "giant"} star` : "A star"} roughly ${cat.ly} light-years from the Sun${cat.spect !== "—" ? `, spectral type ${cat.spect}` : ""}${isGiant ? ` — about ${cat.r.toLocaleString("en-US")}× the Sun's radius` : ""}.`,
+      type: `${stage} · ${cat.spect !== "—" ? cat.spect : kind}`,
+      blurb: `${isGiant ? `A ${sizePhrase}` : "A star"} roughly ${cat.ly} light-years from the Sun${cat.spect !== "—" ? `, spectral type ${cat.spect}` : ""}${isGiant ? ` — about ${cat.r.toLocaleString("en-US")}× the Sun's radius` : ""}${magNote}.`,
       stats: [
         { label: "Distance", value: `${cat.ly} ly` },
+        { label: "Life stage", value: stage },
+        { label: "Parallax", value: `${parallaxMas(cat.ly).toFixed(2)} mas` },
         { label: "Radius", value: `~${cat.r.toLocaleString("en-US")} R☉` },
         { label: "Mass", value: `~${mass.toFixed(2)} M☉` },
       ],
       lightSeconds: cat.ly * SEC_PER_LY,
+      lightTravelNote: starLightTravelNote(cat.ly),
+      scienceNote: [parallaxExplainer(cat.ly), stageNote].filter(Boolean).join(" "),
       links,
     };
   }

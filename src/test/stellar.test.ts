@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { NEARBY_STARS } from "@/data/solarSystem";
 import { featuredStarRender } from "@/stellar/helpers";
-import { estimateMassSolar, resolveMassSolar } from "@/stellar/physics";
+import {
+  estimateMassSolar,
+  parallaxMas,
+  resolveMassSolar,
+  stellarLifeStage,
+} from "@/stellar/physics";
 import { stellarRenderRadius } from "@/stellar/render";
 
 describe("estimateMassSolar", () => {
@@ -19,6 +24,38 @@ describe("estimateMassSolar", () => {
 describe("resolveMassSolar", () => {
   it("uses curated mass for featured stars", () => {
     expect(resolveMassSolar("Sirius", 1.71, "A1V")).toBeCloseTo(2.06, 2);
+  });
+
+  it("uses curated mass for newly featured bright stars", () => {
+    expect(resolveMassSolar("Betelgeuse", 268, "M2Ib")).toBeCloseTo(16, 0);
+    expect(resolveMassSolar("Rigel", 78, "B8Ia")).toBeCloseTo(21, 0);
+  });
+});
+
+describe("parallaxMas", () => {
+  it("returns larger parallax for nearer stars", () => {
+    expect(parallaxMas(4.25)).toBeGreaterThan(parallaxMas(500));
+  });
+
+  it("matches the 3261.56/d_ly relation", () => {
+    expect(parallaxMas(10)).toBeCloseTo(326.156, 2);
+  });
+});
+
+describe("stellarLifeStage", () => {
+  it("classifies red supergiants", () => {
+    expect(stellarLifeStage("M2Ib", 268)).toBe("Red supergiant");
+    expect(stellarLifeStage("M1Ib", 295)).toBe("Red supergiant");
+  });
+
+  it("classifies blue supergiants", () => {
+    expect(stellarLifeStage("B8Ia", 78)).toBe("Blue supergiant");
+    expect(stellarLifeStage("A2Ia", 203)).toBe("Blue supergiant");
+  });
+
+  it("classifies main-sequence dwarfs", () => {
+    expect(stellarLifeStage("M5.5V", 0.15)).toBe("Main sequence");
+    expect(stellarLifeStage("A1V", 1.71)).toBe("Main sequence");
   });
 });
 

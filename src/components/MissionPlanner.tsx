@@ -10,6 +10,7 @@ import {
   type PropulsionMode,
   type VesselConfig,
 } from "@/mission/types";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 interface MissionPlannerProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface MissionPlannerProps {
 }
 
 export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }: MissionPlannerProps) => {
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState(mission.destination ?? "");
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -56,7 +58,7 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
       <button
         onClick={onToggle}
         title="Open star navigator"
-        className="pointer-events-auto absolute right-4 top-20 z-20 flex items-center gap-2 rounded-full glass px-4 py-2 text-xs font-semibold text-foreground/90 transition-colors hover:text-primary"
+        className="pointer-events-auto absolute right-3 top-[calc(6.5rem+env(safe-area-inset-top,0px))] z-20 flex min-h-11 items-center gap-2 rounded-full glass px-4 py-2.5 text-xs font-semibold text-foreground/90 transition-colors hover:text-primary md:right-4 md:top-20"
       >
         <Compass className="h-4 w-4" strokeWidth={1.5} />
         Navigate
@@ -65,9 +67,19 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
   }
 
   return (
-    <aside className="pointer-events-auto absolute right-4 top-16 z-20 w-[min(20rem,calc(100%-2rem))]">
-      <div className="glass-shell">
-        <div className="glass-core flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden">
+    <aside
+      className={
+        isMobile
+          ? "pointer-events-auto fixed inset-x-0 bottom-0 z-30 max-h-[min(78dvh,560px)]"
+          : "pointer-events-auto absolute right-4 top-16 z-20 w-[min(20rem,calc(100%-2rem))]"
+      }
+    >
+      <div className={`glass-shell ${isMobile ? "rounded-b-none rounded-t-2xl" : ""}`}>
+        <div
+          className={`glass-core flex flex-col overflow-hidden ${
+            isMobile ? "max-h-[min(78dvh,560px)] pb-[env(safe-area-inset-bottom,0px)]" : "max-h-[calc(100dvh-6rem)]"
+          }`}
+        >
           <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
             <div className="flex items-center gap-2">
               <Navigation className="h-4 w-4 text-beam" strokeWidth={1.5} />

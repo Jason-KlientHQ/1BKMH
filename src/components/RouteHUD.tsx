@@ -26,7 +26,7 @@ export const RouteHUD = ({
   const pct = Math.round(progress * 100);
 
   return (
-    <div className="pointer-events-auto absolute bottom-20 left-4 z-20 w-[min(22rem,calc(100%-2rem))]">
+    <div className="pointer-events-auto absolute inset-x-3 bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] z-20 md:inset-x-auto md:bottom-20 md:left-4 md:w-[min(22rem,calc(100%-2rem))]">
       <div className="glass-shell">
         <div className="glass-core p-4 font-mono-num">
           <div className="flex items-center justify-between gap-2 border-b border-white/8 pb-2">
@@ -68,7 +68,7 @@ export const RouteHUD = ({
             <button
               type="button"
               onClick={onPlayPause}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-beam/30 bg-beam/10 text-beam transition-colors hover:bg-beam/20"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-beam/30 bg-beam/10 text-beam transition-colors hover:bg-beam/20 md:h-8 md:w-8"
               title={flying ? "Pause flight" : "Play flight"}
             >
               {flying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -76,7 +76,7 @@ export const RouteHUD = ({
             <button
               type="button"
               onClick={onStop}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-muted-foreground transition-colors hover:text-foreground"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8"
               title="Stop and reset"
             >
               <Square className="h-3 w-3" fill="currentColor" />

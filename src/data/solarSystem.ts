@@ -148,6 +148,104 @@ export const EXOTIC_OBJECTS: ExoticObject[] = [
     stats: [{ label: "Distance", value: "~2.4 billion ly" }, { label: "Power", value: "> 1 trillion Suns" }, { label: "Type", value: "Quasar (AGN)" }] },
 ];
 
+/* --------------------------- cosmic landmarks ------------------------------- */
+export interface CosmicLandmark {
+  name: string;
+  kind: "galaxy" | "galactic_center" | "satellite_galaxy";
+  typeLabel: string;
+  distanceLy: number;
+  /** Compressed scene placement (ly) — navigable edge of the map. */
+  sceneDistanceLy: number;
+  dir: [number, number, number];
+  color: string;
+  desc: string;
+  stats: { label: string; value: string }[];
+}
+
+export const COSMIC_LANDMARKS: CosmicLandmark[] = [
+  {
+    name: "Andromeda Galaxy (M31)",
+    kind: "galaxy",
+    typeLabel: "Spiral galaxy",
+    distanceLy: 2_540_000,
+    sceneDistanceLy: 18_000,
+    dir: [0.739, 0.66, 0.139],
+    color: "#c8d4ff",
+    desc: "Our nearest major galactic neighbour — a spiral galaxy on a collision course with the Milky Way in about 4 billion years. (Placed near the map edge; true distance ~2.5 million ly.)",
+    stats: [
+      { label: "Distance", value: "~2.54 million ly" },
+      { label: "Diameter", value: "~220,000 ly" },
+      { label: "Type", value: "Spiral galaxy" },
+    ],
+  },
+  {
+    name: "Triangulum Galaxy (M33)",
+    kind: "galaxy",
+    typeLabel: "Spiral galaxy",
+    distanceLy: 2_730_000,
+    sceneDistanceLy: 19_000,
+    dir: [0.789, 0.51, 0.342],
+    color: "#b8c8ff",
+    desc: "The third-largest galaxy in our Local Group — a face-on spiral smaller than Andromeda but rich with star-forming regions. (Compressed to the map edge for navigation.)",
+    stats: [
+      { label: "Distance", value: "~2.73 million ly" },
+      { label: "Diameter", value: "~60,000 ly" },
+      { label: "Type", value: "Spiral galaxy" },
+    ],
+  },
+  {
+    name: "Large Magellanic Cloud",
+    kind: "satellite_galaxy",
+    typeLabel: "Dwarf galaxy",
+    distanceLy: 163_000,
+    sceneDistanceLy: 14_000,
+    dir: [0.055, -0.938, 0.342],
+    color: "#d0dcff",
+    desc: "A dwarf galaxy orbiting the Milky Way — home to the Tarantula Nebula and the supernova SN 1987A. Visible from the southern hemisphere.",
+    stats: [
+      { label: "Distance", value: "~163,000 ly" },
+      { label: "Diameter", value: "~14,000 ly" },
+      { label: "Type", value: "Satellite galaxy" },
+    ],
+  },
+  {
+    name: "Small Magellanic Cloud",
+    kind: "satellite_galaxy",
+    typeLabel: "Dwarf galaxy",
+    distanceLy: 200_000,
+    sceneDistanceLy: 15_000,
+    dir: [0.288, -0.955, 0.067],
+    color: "#c4d0ff",
+    desc: "A smaller companion galaxy to the Milky Way — tidally interacting with the LMC and slowly being torn apart by our galaxy's gravity.",
+    stats: [
+      { label: "Distance", value: "~200,000 ly" },
+      { label: "Diameter", value: "~7,000 ly" },
+      { label: "Type", value: "Satellite galaxy" },
+    ],
+  },
+  {
+    name: "Galactic Center (Sgr A*)",
+    kind: "galactic_center",
+    typeLabel: "Galactic center",
+    distanceLy: 26_000,
+    sceneDistanceLy: 12_000,
+    dir: [-0.055, -0.485, -0.873],
+    color: "#ffcf8f",
+    desc: "The heart of the Milky Way — a supermassive black hole four million times the Sun's mass, hidden behind thick lanes of dust in Sagittarius.",
+    stats: [
+      { label: "Distance", value: "~26,000 ly" },
+      { label: "Black hole", value: "~4.1 million M☉" },
+      { label: "Location", value: "Sagittarius A*" },
+    ],
+  },
+];
+
+/** Schematic Local Bubble — low-density cavity around the Sun (~200–300 ly). */
+export const LOCAL_BUBBLE = {
+  radiusLy: 250,
+  desc: "A low-density cavity in the interstellar medium, likely carved by ancient supernovae. The Sun sits inside it.",
+};
+
 /* ------------------------------- Black holes ------------------------------ */
 export interface BlackHole {
   name: string;
@@ -273,4 +371,14 @@ export const NEARBY_STARS: StarPOI[] = [
   { name: "Castor", distance: 51.0, dir: [38.0, 22.0, -18.0], spectral: "A1V + binary", color: "#c8d8ff", radiusSolar: 2.4, lum: 0.9, desc: "A sextuple star system — one of the brightest stars in Gemini." },
   { name: "Regulus", distance: 79.3, dir: [55.0, -42.0, 28.0], spectral: "B8IV blue-white", color: "#b0c8ff", radiusSolar: 3.5, lum: 0.95, desc: "The heart of Leo — a fast-spinning blue-white star distorted into an egg shape." },
   { name: "Spica", distance: 250.0, dir: [180.0, -120.0, 80.0], spectral: "B1III blue giant", color: "#a8c0ff", radiusSolar: 7.4, lum: 1.0, desc: "A brilliant blue giant binary — the brightest star in Virgo." },
+  { name: "Bellatrix", distance: 252.44, dir: [0.1506, 0.1106, 0.9824], spectral: "B2III blue giant", color: "#b0c1ff", radiusSolar: 5.61, lum: 0.95, desc: "Orion's western shoulder — a hot blue giant that helped define the Hunter's unmistakable shape." },
+  { name: "Mintaka", distance: 691, dir: [0.1219, -0.0052, 0.9925], spectral: "O9.5II blue giant", color: "#9ab0ff", radiusSolar: 16, lum: 1.0, desc: "The western star of Orion's Belt — a multiple system of luminous blue giants aligned in our sky." },
+  { name: "Alnilam", distance: 1344, dir: [0.1036, -0.0209, 0.9944], spectral: "B0Ia blue supergiant", color: "#a0b8ff", radiusSolar: 42, lum: 1.0, desc: "The middle jewel of Orion's Belt — a young blue supergiant blazing with the fire of a star still in its prime." },
+  { name: "Alnitak", distance: 736, dir: [0.0838, -0.0337, 0.9959], spectral: "O9.5Ib blue supergiant", color: "#9ab0ff", radiusSolar: 20, lum: 1.0, desc: "The eastern star of Orion's Belt — an O-type supergiant ionizing the gas of the Horsehead Nebula region." },
+  { name: "Canopus", distance: 309.15, dir: [-0.0632, -0.7954, 0.6027], spectral: "F0Ib yellow-white supergiant", color: "#e3e8ff", radiusSolar: 55, lum: 1.0, desc: "The second-brightest star in the night sky — a brilliant F-type supergiant riding high in southern skies." },
+  { name: "Polaris", distance: 432.57, dir: [0.0101, 0.9999, 0.0079], spectral: "F7Ib-II yellow supergiant", color: "#fff0df", radiusSolar: 49, lum: 0.9, desc: "The North Star — a pulsating yellow supergiant marking Earth's spin axis, with a history as a navigation beacon." },
+  { name: "Betelgeuse", distance: 497.95, dir: [0.0209, 0.1289, 0.9914], spectral: "M2Ib red supergiant", color: "#ffa87d", radiusSolar: 268, lum: 1.0, desc: "A dying red supergiant on Orion's shoulder — vast enough to swallow Mars' orbit, and expected to explode as a supernova within the next 100,000 years." },
+  { name: "Antares", distance: 553.75, dir: [-0.3448, -0.4451, -0.8264], spectral: "M1Ib red supergiant", color: "#ff8563", radiusSolar: 295, lum: 1.0, desc: "The rival of Mars — a crimson supergiant in Scorpius, one of the largest stars visible to the naked eye." },
+  { name: "Rigel", distance: 860, dir: [0.195, -0.143, 0.970], spectral: "B8Ia blue supergiant", color: "#b8ccff", radiusSolar: 78, lum: 1.0, desc: "Orion's brilliant left foot — a blue supergiant that outshines our entire solar system despite sitting hundreds of light-years away." },
+  { name: "Deneb", distance: 2615, dir: [0.456, 0.710, -0.536], spectral: "A2Ia blue supergiant", color: "#e8ecff", radiusSolar: 203, lum: 1.0, desc: "The tail of Cygnus the Swan — one of the most luminous stars known, a blue supergiant whose true distance was debated for decades." },
 ];

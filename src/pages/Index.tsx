@@ -143,14 +143,14 @@ const Index = () => {
       <button
         onClick={toggle}
         title={muted ? "Unmute ambient sound" : "Mute ambient sound"}
-        className="fixed bottom-4 left-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full glass text-foreground/80 transition-colors hover:text-primary"
+        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-[60] flex h-11 w-11 items-center justify-center rounded-full glass text-foreground/80 transition-colors hover:text-primary"
       >
         {muted ? <VolumeX className="h-4 w-4" strokeWidth={1.5} /> : <Volume2 className="h-4 w-4" strokeWidth={1.5} />}
       </button>
 
       {/* First-visit onboarding nudge */}
       {showHint && (
-        <div className="fixed bottom-5 left-1/2 z-[70] w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl glass p-4 text-center">
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[70] w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 rounded-2xl glass p-4 text-center">
           <p className="text-sm text-foreground">Enter your birthday, watch your light travel, and click any world for details.</p>
           <button onClick={dismissHint} className="mt-2 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95">
             Got it
@@ -183,9 +183,10 @@ const Index = () => {
           className="animate-float-up mx-auto mt-7 max-w-[34rem] text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg [animation-delay:0.16s]"
           style={{ opacity: 0 }}
         >
-          If a beam of light circled the Sun once every birthday since you were
-          born, it would be deep among the stars by now. Enter your birthday and
-          trace its journey.
+          If a beam of light left the moment you were born and never stopped, it
+          would be deep among the stars by now — one light-year per year of your
+          life. The growing sphere is that metaphor. Enter your birthday and trace
+          how far it has traveled.
         </p>
 
         {/* Glass-island input — the form as part of the show. */}
@@ -289,8 +290,22 @@ const Index = () => {
       )}
 
       <footer className="relative z-10 border-t border-white/5 px-5 py-10 text-center text-xs text-muted-foreground/60">
-        Light travels 1,079,252,848.8 km/h — 9.46 trillion km a year. Distances and
-        stars are approximate, for wonder over precision.
+        <p>
+          Light travels 1,079,252,848.8 km/h — 9.46 trillion km a year. Distances and
+          stars are approximate, for wonder over precision.
+        </p>
+        <p className="mt-3">
+          Built with assistance from{" "}
+          <a
+            href="https://x.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground/80 underline decoration-dotted underline-offset-4 transition-colors hover:text-primary"
+          >
+            xAI Grok
+          </a>
+          .
+        </p>
       </footer>
     </main>
   );
@@ -468,10 +483,10 @@ const SolarSystemSection = ({
       />
 
       {/* always-visible birthday input (heading removed — it repeated the hero) */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-5 pt-5 text-center">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-center md:px-5 md:pt-5">
         {/* birthday entry — pinned here so it's always findable */}
-        <div className="pointer-events-auto mt-1 flex flex-col items-center gap-1.5">
-          <div className="flex items-center gap-2 rounded-full glass p-1.5 pl-4">
+        <div className="pointer-events-auto mt-1 flex w-full max-w-md flex-col items-center gap-1.5">
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 rounded-2xl glass p-2 pl-3 md:rounded-full md:p-1.5 md:pl-4">
             <label htmlFor="bday-overlay" className="hidden text-[11px] font-medium text-muted-foreground sm:inline">
               Your birthday
             </label>
@@ -481,11 +496,11 @@ const SolarSystemSection = ({
               value={bday}
               onChange={(e) => setBday(e.target.value)}
               max={new Date().toISOString().split("T")[0]}
-              className="rounded-full border border-white/10 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none [color-scheme:dark] focus:border-primary/40"
+              className="min-h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-background/60 px-3 py-2 text-sm text-foreground outline-none [color-scheme:dark] focus:border-primary/40"
             />
             <button
               onClick={calculate}
-              className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-all duration-300 ease-fluid hover:shadow-[0_6px_24px_-6px_hsl(var(--primary)/0.7)] active:scale-[0.97]"
+              className="min-h-11 shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all duration-300 ease-fluid hover:shadow-[0_6px_24px_-6px_hsl(var(--primary)/0.7)] active:scale-[0.97]"
             >
               {lightYears > 0 ? "Update" : "See my Light"}
             </button>
