@@ -32,6 +32,18 @@ export default defineConfig(({ mode }) => ({
           if (/[\\/]node_modules[\\/](three|three-mesh-bvh|three-stdlib)[\\/]/.test(id)) {
             return "three";
           }
+          if (/[\\/]node_modules[\\/](@react-three)[\\/]/.test(id)) {
+            return "r3f";
+          }
+          if (id.includes("/src/components/SolarSystem") || id.includes("/src/components/MissionFlight")) {
+            return "scene";
+          }
+          if (id.includes("/src/components/MissionPlanner") || id.includes("/src/components/RouteHUD")) {
+            return "mission-ui";
+          }
+          if (id.includes("/src/components/TechnicalReadme")) {
+            return "readme";
+          }
         },
       },
     },

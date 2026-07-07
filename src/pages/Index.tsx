@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Sparkles, Radio, Volume2, VolumeX } from "lucide-react";
 import { StarField } from "@/components/StarField";
-import { SolarSystem, type SolarSystemHandle } from "@/components/SolarSystem";
-import { TechnicalReadme } from "@/components/TechnicalReadme";
+import type { SolarSystemHandle } from "@/components/SolarSystem";
 import { NEARBY_STARS as STARS } from "@/data/solarSystem";
 import { grokipediaUrl } from "@/data/bodyInfo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -14,7 +13,6 @@ import {
   starsReached,
   type LightJourneyResult,
 } from "@/lib/lightJourney";
-import { MissionPlanner } from "@/components/MissionPlanner";
 import { RouteHUD } from "@/components/RouteHUD";
 import { computeMission } from "@/mission/preview";
 import { findNavStar } from "@/mission/stars";
@@ -23,6 +21,22 @@ import { DEFAULT_VESSEL, type MissionState } from "@/mission/types";
 import type { AccuracyMode } from "@/lib/accuracyMode";
 
 const VISUAL_TRIP_MS = 36_000;
+
+const SolarSystem = lazy(() =>
+  import("@/components/SolarSystem").then((m) => ({ default: m.SolarSystem })),
+);
+const MissionPlanner = lazy(() =>
+  import("@/components/MissionPlanner").then((m) => ({ default: m.MissionPlanner })),
+);
+const TechnicalReadme = lazy(() =>
+  import("@/components/TechnicalReadme").then((m) => ({ default: m.TechnicalReadme })),
+);
+
+const SceneLoader = () => (
+  <div className="flex h-full w-full items-center justify-center bg-[#04050c] text-sm text-muted-foreground">
+    Loading the sky…
+  </div>
+);
 
 const Index = () => {
   const [bday, setBday] = useState("");
@@ -44,6 +58,7 @@ const Index = () => {
   const [accuracyMode, setAccuracyMode] = useState<AccuracyMode>(
     () => initialUrl?.accuracy ?? "cinematic",
   );
+  const [trueOrbits, setTrueOrbits] = useState(() => initialUrl?.trueOrbits ?? false);
   const { muted, toggle } = useAmbient();
   const systemRef = useRef<SolarSystemHandle>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
@@ -62,6 +77,7 @@ const Index = () => {
           mission,
           fly: fly ?? flyInUrl,
           accuracy: accuracyMode,
+          trueOrbits,
         }),
       );
     } catch {
@@ -98,9 +114,12 @@ const Index = () => {
 
   // On load: restore birthday + mission from the URL.
   useEffect(() => {
-    const { bday: b, leap, mission: m, accuracy } = parseAppUrl(new URLSearchParams(window.location.search));
+    const { bday: b, leap, mission: m, accuracy, trueOrbits: orbits } = parseAppUrl(
+      new URLSearchParams(window.location.search),
+    );
     setMission(m);
     setAccuracyMode(accuracy);
+    setTrueOrbits(orbits);
     if (m.destination) setPlannerOpen(true);
     if (b) {
       setBday(b);
@@ -115,7 +134,7 @@ const Index = () => {
   useEffect(() => {
     if (!hasJourney.current && !mission.destination) return;
     syncUrl();
-  }, [mission, flyInUrl, accuracyMode]);
+  }, [mission, flyInUrl, accuracyMode, trueOrbits]);
 
   // Recompute stats when leap-year preference changes after a journey exists.
   useEffect(() => {
@@ -143,7 +162,9 @@ const Index = () => {
       <StarField />
       <div className="grain-overlay" />
 
-      <TechnicalReadme open={readmeOpen} onClose={() => setReadmeOpen(false)} />
+      <Suspense fallback={null}>
+        <TechnicalReadme open={readmeOpen} onClose={() => setReadmeOpen(false)} />
+      </Suspense>
 
       {/* Ambient-sound mute toggle — fixed, always reachable */}
       <button
@@ -283,6 +304,8 @@ const Index = () => {
         onPlannerOpen={() => setPlannerOpen(true)}
         accuracyMode={accuracyMode}
         onAccuracyModeChange={setAccuracyMode}
+        trueOrbits={trueOrbits}
+        onTrueOrbitsChange={setTrueOrbits}
       />
 
       {/* ============================ RESULTS ============================ */}
@@ -340,6 +363,8 @@ const SolarSystemSection = ({
   onPlannerOpen,
   accuracyMode,
   onAccuracyModeChange,
+  trueOrbits,
+  onTrueOrbitsChange,
 }: {
   sectionRef: React.RefObject<HTMLDivElement>;
   systemRef: React.RefObject<SolarSystemHandle>;
@@ -360,6 +385,8 @@ const SolarSystemSection = ({
   onPlannerOpen: () => void;
   accuracyMode: AccuracyMode;
   onAccuracyModeChange: (mode: AccuracyMode) => void;
+  trueOrbits: boolean;
+  onTrueOrbitsChange: (value: boolean) => void;
 }) => {
   const [tripProgress, setTripProgress] = useState(0);
   const [missionFlying, setMissionFlying] = useState(false);
@@ -445,26 +472,30 @@ const SolarSystemSection = ({
           </div>
         }
       >
-        <SolarSystem
-          ref={systemRef}
-          lightYears={lightYears}
-          birthDate={bday}
-          destination={mission.destination}
-          missionResult={missionResult}
-          tripProgress={tripProgress}
-          missionFlying={missionFlying}
-          missionMode={mission.mode}
-          missionOrigin={mission.origin}
-          onDestinationSelect={(name) =>
-            onMissionChange({ ...mission, destination: name })
-          }
-          onSetMissionDestination={(name) => {
-            onMissionChange({ ...mission, destination: name });
-            onPlannerOpen();
-          }}
-          accuracyMode={accuracyMode}
-          onAccuracyModeChange={onAccuracyModeChange}
-        />
+        <Suspense fallback={<SceneLoader />}>
+          <SolarSystem
+            ref={systemRef}
+            lightYears={lightYears}
+            birthDate={bday}
+            destination={mission.destination}
+            missionResult={missionResult}
+            tripProgress={tripProgress}
+            missionFlying={missionFlying}
+            missionMode={mission.mode}
+            missionOrigin={mission.origin}
+            onDestinationSelect={(name) =>
+              onMissionChange({ ...mission, destination: name })
+            }
+            onSetMissionDestination={(name) => {
+              onMissionChange({ ...mission, destination: name });
+              onPlannerOpen();
+            }}
+            accuracyMode={accuracyMode}
+            onAccuracyModeChange={onAccuracyModeChange}
+            trueOrbitsManual={trueOrbits}
+            onTrueOrbitsChange={onTrueOrbitsChange}
+          />
+        </Suspense>
       </ErrorBoundary>
 
       {missionResult && mission.destination && (
@@ -488,13 +519,15 @@ const SolarSystemSection = ({
         />
       )}
 
-      <MissionPlanner
-        open={plannerOpen}
-        onToggle={onPlannerToggle}
-        mission={mission}
-        onChange={onMissionChange}
-        onNavigate={() => startFlight(true)}
-      />
+      <Suspense fallback={null}>
+        <MissionPlanner
+          open={plannerOpen}
+          onToggle={onPlannerToggle}
+          mission={mission}
+          onChange={onMissionChange}
+          onNavigate={() => startFlight(true)}
+        />
+      </Suspense>
 
       {/* always-visible birthday input (heading removed — it repeated the hero) */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-center md:px-5 md:pt-5">

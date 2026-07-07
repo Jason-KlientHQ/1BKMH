@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { ExploreMenu } from "@/components/ExploreMenu";
 import * as THREE from "three";
 import { X, Maximize2, Minimize2, Radio, Compass, Navigation, Info, GraduationCap } from "lucide-react";
 import { computeOrbitalEpoch, DEFAULT_CLOCK_ANCHOR } from "@/lib/simEpoch";
@@ -26,6 +26,7 @@ import {
   MOON_CINEMATIC,
   siderealOrbitRateRadPerYear,
 } from "@/lib/orbitRate";
+import { catalogDisplayScale, featuredDisplayScale } from "@/lib/stellarDisplay";
 import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
 import { eventForYear } from "@/data/worldEvents";
 import {
@@ -233,33 +234,7 @@ const StarSurface = ({
 
 const REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-// Jump destinations for the Explore menu (far things you can't easily click).
-const EXPLORE_GROUPS: { label: string; items: string[] }[] = [
-  { label: "Spacecraft", items: [ROADSTER.name, ...SPACECRAFT.map((s) => s.name)] },
-  { label: "Comets", items: COMETS.map((c) => c.name) },
-  {
-    label: "Bright stars",
-    items: [
-      "Sirius",
-      "Vega",
-      "Arcturus",
-      "Aldebaran",
-      "Betelgeuse",
-      "Antares",
-      "Rigel",
-      "Deneb",
-      "Canopus",
-      "Polaris",
-      "Bellatrix",
-      "Mintaka",
-      "Alnilam",
-      "Alnitak",
-    ],
-  },
-  { label: "Exotic objects", items: EXOTIC_OBJECTS.map((o) => o.name) },
-  { label: "Beyond the neighborhood", items: COSMIC_LANDMARKS.map((l) => l.name) },
-  { label: "Black holes", items: BLACK_HOLES.map((b) => b.name) },
-];
+
 
 /* --------------------------- the time integrator -------------------------- */
 const TimeKeeper = ({
@@ -1056,6 +1031,7 @@ const CatalogStars = ({
   scrubYears: number | null;
   lightYears: number;
 }) => {
+  const { camera } = useThree();
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hoverGroupRef = useRef<THREE.Group>(null);
   const list = useMemo(() => {
@@ -1080,7 +1056,8 @@ const CatalogStars = ({
     const m = new THREE.Matrix4();
     list.forEach((s, i) => {
       const [px, py, pz] = starScenePositionAtEpoch(s.ly, s.pos, s.name, epoch);
-      m.makeScale(sizes[i], sizes[i], sizes[i]);
+      const display = catalogDisplayScale(sizes[i], s.mag, camera.position, [px, py, pz]);
+      m.makeScale(display, display, display);
       m.setPosition(px, py, pz);
       mesh.setMatrixAt(i, m);
     });
@@ -1147,14 +1124,17 @@ const NearbyStars = ({
     []
   );
   const groupRefs = useRef<(THREE.Group | null)[]>([]);
+  const { camera } = useThree();
 
   useFrame(() => {
     const epoch = clock.current.orbitalYears;
-    placed.forEach(({ star }, i) => {
+    placed.forEach(({ star, size }, i) => {
       const g = groupRefs.current[i];
       if (!g) return;
       const [px, py, pz] = starScenePositionAtEpoch(star.distance, star.dir, star.name, epoch);
       g.position.set(px, py, pz);
+      const display = featuredDisplayScale(size, star.radiusSolar, camera.position, [px, py, pz]);
+      g.scale.setScalar(display / size);
     });
   });
 
@@ -1720,6 +1700,8 @@ interface SolarSystemProps {
   destination?: string | null;
   accuracyMode?: AccuracyMode;
   onAccuracyModeChange?: (mode: AccuracyMode) => void;
+  trueOrbitsManual?: boolean;
+  onTrueOrbitsChange?: (value: boolean) => void;
   onDestinationSelect?: (name: string) => void;
   onSetMissionDestination?: (name: string) => void;
   missionResult?: MissionResult | null;
@@ -1738,6 +1720,8 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       destination = null,
       accuracyMode = "cinematic",
       onAccuracyModeChange,
+      trueOrbitsManual = false,
+      onTrueOrbitsChange,
       onDestinationSelect,
       onSetMissionDestination,
       missionResult = null,
@@ -1775,11 +1759,10 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     const [selected, setSelected] = useState<string | null>(null);
     const [isFs, setIsFs] = useState(false);
     const [exploreOpen, setExploreOpen] = useState(false);
-    const [trueMoonsManual, setTrueMoonsManual] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const goalToken = useRef(0);
 
-    const trueMoonPeriods = resolveTrueMoonPeriods(accuracyMode, trueMoonsManual);
+    const trueMoonPeriods = resolveTrueMoonPeriods(accuracyMode, trueOrbitsManual);
     const detailBadges = selected ? bodyAccuracyBadges(selected, { trueMoonPeriods }) : [];
     const hudBadges = globalAccuracyBadges(accuracyMode);
 
@@ -1951,6 +1934,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             <button
               onClick={() => setExploreOpen((v) => !v)}
               title="Jump to a destination"
+              data-testid="explore-trigger"
               className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
             >
               <Compass className="h-4 w-4" strokeWidth={1.5} />
@@ -1974,13 +1958,13 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             {accuracyMode === "cinematic" && (
               <button
                 type="button"
-                onClick={() => setTrueMoonsManual((v) => !v)}
-                title={trueMoonsManual ? "Moons & exoplanets: true periods" : "Moons & exoplanets: cinematic"}
+                onClick={() => onTrueOrbitsChange?.(!trueOrbitsManual)}
+                title={trueOrbitsManual ? "Moons & exoplanets: true periods" : "Moons & exoplanets: cinematic"}
                 className={`hidden rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors sm:inline-block ${
-                  trueMoonsManual ? "bg-beam/15 text-beam" : "text-muted-foreground hover:text-foreground"
+                  trueOrbitsManual ? "bg-beam/15 text-beam" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {trueMoonsManual ? "True orbits" : "Cinematic orbits"}
+                {trueOrbitsManual ? "True orbits" : "Cinematic orbits"}
               </button>
             )}
             {focusName && (
@@ -2170,48 +2154,12 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
           ))}
         </div>
 
-        {exploreOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <>
-              <button
-                type="button"
-                aria-label="Close explore menu"
-                className="fixed inset-0 z-[100] bg-black/45"
-                onClick={() => setExploreOpen(false)}
-              />
-              <div
-                className={`fixed z-[101] overflow-y-auto rounded-2xl glass p-2 text-left shadow-2xl ${
-                  isMobile
-                    ? "inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] max-h-[min(50dvh,360px)]"
-                    : "bottom-24 right-4 w-64 max-h-[min(60dvh,400px)]"
-                }`}
-              >
-                <p className="px-2 py-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60">
-                  Explore destinations
-                </p>
-                {EXPLORE_GROUPS.map((g) => (
-                  <div key={g.label} className="mb-1 last:mb-0">
-                    <p className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/60">{g.label}</p>
-                    {g.items.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => {
-                          onPick(n);
-                          setExploreOpen(false);
-                        }}
-                        className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-white/[0.06] hover:text-primary"
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </>,
-            document.body,
-          )}
+        <ExploreMenu
+          open={exploreOpen}
+          isMobile={isMobile}
+          onClose={() => setExploreOpen(false)}
+          onPick={onPick}
+        />
       </div>
     );
   }

@@ -36,6 +36,16 @@ describe("mission URL", () => {
     expect(q).toContain("mass=500");
   });
 
+  it("round-trips true orbits flag in URL", () => {
+    const q = buildAppShareQuery({
+      bday: "1990-01-01",
+      mission: { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
+      trueOrbits: true,
+    });
+    const parsed = parseAppUrl(new URLSearchParams(q.slice(1)));
+    expect(parsed.trueOrbits).toBe(true);
+  });
+
   it("round-trips educational accuracy mode in URL", () => {
     const q = buildAppShareQuery({
       bday: "1990-01-01",

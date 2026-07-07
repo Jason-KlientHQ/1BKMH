@@ -1,6 +1,7 @@
 import type { CatalogStar } from "@/data/starCatalog";
 import type { StarPOI } from "@/data/solarSystem";
 import { estimateLuminositySolar, resolveMassSolar } from "@/stellar/physics";
+import { catalogBaseSize } from "@/lib/stellarDisplay";
 import { stellarGlowOpacity, stellarRenderRadius } from "@/stellar/render";
 
 export interface StarRenderProps {
@@ -24,15 +25,16 @@ export function featuredStarRender(star: StarPOI): StarRenderProps {
 export function catalogStarRender(star: CatalogStar): StarRenderProps {
   const massSolar = resolveMassSolar(star.name, star.r, star.spect);
   const luminositySolar = estimateLuminositySolar(star.r, massSolar, star.spect);
+  const raw = stellarRenderRadius({
+    radiusSolar: star.r,
+    massSolar,
+    luminositySolar,
+    apparentMag: star.mag,
+  });
   return {
     massSolar,
     luminositySolar,
-    size: stellarRenderRadius({
-      radiusSolar: star.r,
-      massSolar,
-      luminositySolar,
-      apparentMag: star.mag,
-    }),
+    size: catalogBaseSize(raw, star.mag),
     glow: stellarGlowOpacity(luminositySolar),
   };
 }

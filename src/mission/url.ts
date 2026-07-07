@@ -66,9 +66,15 @@ export interface AppUrlState {
   /** When true, shared links auto-start the cinematic flight on load. */
   fly?: boolean;
   accuracy?: AccuracyMode;
+  /** Manual true moon/exoplanet orbit periods (educational mode implies true). */
+  trueOrbits?: boolean;
 }
 
 export function parseFlyParam(value: string | null): boolean {
+  return value === "1" || value === "true";
+}
+
+export function parseOrbitsParam(value: string | null): boolean {
   return value === "1" || value === "true";
 }
 
@@ -96,6 +102,7 @@ export function buildAppShareQuery(state: AppUrlState): string {
   if (state.fly) parts.push("fly=1");
   const acc = accuracyQueryValue(state.accuracy ?? "cinematic");
   if (acc) parts.push(`accuracy=${acc}`);
+  if (state.trueOrbits) parts.push("orbits=1");
 
   return parts.length ? `?${parts.join("&")}` : "";
 }
@@ -106,6 +113,7 @@ export function parseAppUrl(params: URLSearchParams): {
   mission: MissionState;
   fly: boolean;
   accuracy: AccuracyMode;
+  trueOrbits: boolean;
 } {
   return {
     bday: parseBirthdayParam(params.get("b")),
@@ -113,5 +121,6 @@ export function parseAppUrl(params: URLSearchParams): {
     mission: parseMissionParams(params),
     fly: parseFlyParam(params.get("fly")),
     accuracy: parseAccuracyParam(params.get("accuracy")),
+    trueOrbits: parseOrbitsParam(params.get("orbits")),
   };
 }
