@@ -1,0 +1,336 @@
+{
+  "fetchedAt": "2026-07-07",
+  "source": "NASA Exoplanet Archive (pscomppars)",
+  "sourceUrl": "https://exoplanetarchive.ipac.caltech.edu/",
+  "galaxyTotal": 6316,
+  "planets": [
+    {
+      "host": "55 Cancri",
+      "name": "55 Cnc e",
+      "aAU": 0.01544,
+      "periodDays": 0.7365474,
+      "radiusEarth": 1.875,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "55 Cancri",
+      "name": "55 Cnc b",
+      "aAU": 0.118,
+      "periodDays": 14.651552,
+      "radiusEarth": 13.9,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "55 Cancri",
+      "name": "55 Cnc c",
+      "aAU": 0.247,
+      "periodDays": 44.3936,
+      "radiusEarth": 8.51,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "55 Cancri",
+      "name": "55 Cnc f",
+      "aAU": 0.802,
+      "periodDays": 260.58,
+      "radiusEarth": 7.59,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "55 Cancri",
+      "name": "55 Cnc d",
+      "aAU": 5.6,
+      "periodDays": 4799,
+      "radiusEarth": 13,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Barnard's Star",
+      "name": "Barnard d",
+      "aAU": 0.0188,
+      "periodDays": 2.3402,
+      "radiusEarth": 0.694,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Barnard's Star",
+      "name": "Barnard b",
+      "aAU": 0.0229,
+      "periodDays": 3.1542,
+      "radiusEarth": 0.72,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Barnard's Star",
+      "name": "Barnard c",
+      "aAU": 0.0274,
+      "periodDays": 4.1244,
+      "radiusEarth": 0.743,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Barnard's Star",
+      "name": "Barnard e",
+      "aAU": 0.0381,
+      "periodDays": 6.7392,
+      "radiusEarth": 0.637,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Epsilon Eridani",
+      "name": "eps Eri b",
+      "aAU": 3.53,
+      "periodDays": 2680,
+      "radiusEarth": 13.8,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 581",
+      "name": "GJ 581 e",
+      "aAU": 0.02799,
+      "periodDays": 3.1481,
+      "radiusEarth": 1.38,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 581",
+      "name": "GJ 581 b",
+      "aAU": 0.0399,
+      "periodDays": 5.3686,
+      "radiusEarth": 4.79,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 581",
+      "name": "GJ 581 c",
+      "aAU": 0.0718,
+      "periodDays": 12.9211,
+      "radiusEarth": 2.5,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 876",
+      "name": "GJ 876 d",
+      "aAU": 0.02080665,
+      "periodDays": 1.93778,
+      "radiusEarth": 2.51,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 876",
+      "name": "GJ 876 c",
+      "aAU": 0.12959,
+      "periodDays": 30.0881,
+      "radiusEarth": 14,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 876",
+      "name": "GJ 876 b",
+      "aAU": 0.208317,
+      "periodDays": 61.1166,
+      "radiusEarth": 13.3,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Gliese 876",
+      "name": "GJ 876 e",
+      "aAU": 0.3343,
+      "periodDays": 124.26,
+      "radiusEarth": 3.92,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Kapteyn's Star",
+      "name": "Kapteyn c",
+      "aAU": 0.311,
+      "periodDays": 121.54,
+      "radiusEarth": 2.54,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "LHS 1140",
+      "name": "LHS 1140 c",
+      "aAU": 0.027,
+      "periodDays": 3.77794,
+      "radiusEarth": 1.272,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "LHS 1140",
+      "name": "LHS 1140 b",
+      "aAU": 0.0946,
+      "periodDays": 24.73723,
+      "radiusEarth": 1.73,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "Luyten's Star",
+      "name": "GJ 273 c",
+      "aAU": 0.036467,
+      "periodDays": 4.7234,
+      "radiusEarth": 1.06,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Luyten's Star",
+      "name": "GJ 273 b",
+      "aAU": 0.091101,
+      "periodDays": 18.6498,
+      "radiusEarth": 1.51,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Proxima Centauri",
+      "name": "Proxima Cen d",
+      "aAU": 0.02881,
+      "periodDays": 5.12338,
+      "radiusEarth": 0.692,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Proxima Centauri",
+      "name": "Proxima Cen b",
+      "aAU": 0.04848,
+      "periodDays": 11.18465,
+      "radiusEarth": 1.02,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Ross 128",
+      "name": "Ross 128 b",
+      "aAU": 0.0496,
+      "periodDays": 9.8658,
+      "radiusEarth": 1.11,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Tau Ceti",
+      "name": "tau Cet g",
+      "aAU": 0.133,
+      "periodDays": 20,
+      "radiusEarth": 1.18,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Tau Ceti",
+      "name": "tau Cet h",
+      "aAU": 0.243,
+      "periodDays": 49.41,
+      "radiusEarth": 1.19,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Tau Ceti",
+      "name": "tau Cet f",
+      "aAU": 1.334,
+      "periodDays": 636.13,
+      "radiusEarth": 1.81,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Teegarden's Star",
+      "name": "Teegarden's Star b",
+      "aAU": 0.0259,
+      "periodDays": 4.90634,
+      "radiusEarth": 1.05,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Teegarden's Star",
+      "name": "Teegarden's Star c",
+      "aAU": 0.0455,
+      "periodDays": 11.416,
+      "radiusEarth": 1.02,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Teegarden's Star",
+      "name": "Teegarden's Star d",
+      "aAU": 0.0791,
+      "periodDays": 26.13,
+      "radiusEarth": 0.954,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 b",
+      "aAU": 0.01154,
+      "periodDays": 1.510826,
+      "radiusEarth": 1.116,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 c",
+      "aAU": 0.0158,
+      "periodDays": 2.421937,
+      "radiusEarth": 1.097,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 d",
+      "aAU": 0.02227,
+      "periodDays": 4.049219,
+      "radiusEarth": 0.788,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 e",
+      "aAU": 0.02925,
+      "periodDays": 6.101013,
+      "radiusEarth": 0.92,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 f",
+      "aAU": 0.03849,
+      "periodDays": 9.20754,
+      "radiusEarth": 1.045,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 g",
+      "aAU": 0.04683,
+      "periodDays": 12.352446,
+      "radiusEarth": 1.129,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "TRAPPIST-1",
+      "name": "TRAPPIST-1 h",
+      "aAU": 0.06189,
+      "periodDays": 18.772866,
+      "radiusEarth": 0.755,
+      "discoveryMethod": "Transit"
+    },
+    {
+      "host": "Wolf 1061",
+      "name": "Wolf 1061 b",
+      "aAU": 0.0375,
+      "periodDays": 4.8869,
+      "radiusEarth": 1.21,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Wolf 1061",
+      "name": "Wolf 1061 c",
+      "aAU": 0.089,
+      "periodDays": 17.8719,
+      "radiusEarth": 1.66,
+      "discoveryMethod": "Radial Velocity"
+    },
+    {
+      "host": "Wolf 1061",
+      "name": "Wolf 1061 d",
+      "aAU": 0.47,
+      "periodDays": 217.21,
+      "radiusEarth": 2.69,
+      "discoveryMethod": "Radial Velocity"
+    }
+  ]
+}

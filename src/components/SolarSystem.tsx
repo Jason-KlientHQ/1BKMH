@@ -78,7 +78,8 @@ import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePositionAtEpoch } from "@/astrometry/properMotion";
 import { GltfWithFallback, preloadNasaModels, preloadVesselModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
-import { NASA_GLTF } from "@/data/nasaModels";
+import { MOON_MODEL_ROTATION, MOON_MODEL_URL, NASA_GLTF, PLANET_MODEL_ROTATION, PLANET_MODEL_URL } from "@/data/nasaModels";
+import { moonMeshSceneRadius, moonOrbitSceneRadius } from "@/lib/moonScale";
 import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
 import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
@@ -86,6 +87,8 @@ import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useSceneQuality, type SceneQuality } from "@/hooks/useSceneQuality";
 import { PULSAR_PERIOD_SEC, QUASAR_DISK_PERIOD_DAYS, rotationPeriodDays } from "@/data/stellarRotation";
 import { pulsarSpinRateRadPerSec, spinRateRadPerSec } from "@/lib/stellarRotation";
+import { ExoplanetInstances } from "@/components/ExoplanetInstances";
+import { archivePlanetsForHost, confirmedPlanetCount } from "@/data/exoplanetCatalog";
 import { MissionRoute } from "@/components/MissionRoute";
 import { MissionFlight } from "@/components/MissionFlight";
 import { DEFAULT_VESSEL, type MissionOrigin, type MissionResult, type PropulsionMode, type VesselConfig } from "@/mission/types";
@@ -404,6 +407,45 @@ const planetOblateness = (name: string): [number, number, number] => {
   return [1, 1, 1];
 };
 
+const PlanetProcedural = ({
+  r,
+  body,
+  oblate,
+  pickHandlers,
+  accuracyMode,
+}: {
+  r: number;
+  body: Body;
+  oblate: [number, number, number];
+  pickHandlers: object;
+  accuracyMode: AccuracyMode;
+}) => (
+  <group scale={oblate}>
+    <mesh {...pickHandlers}>
+      <sphereGeometry args={[r, 32, 32]} />
+      <meshStandardMaterial
+        color={body.color}
+        emissive={body.emissive ?? "#000000"}
+        emissiveIntensity={body.emissive ? 0.5 : 0}
+        roughness={body.name === "Jupiter" || body.name === "Saturn" ? 0.75 : 0.85}
+        metalness={body.name === "Mercury" || body.name === "Venus" ? 0.12 : 0.05}
+      />
+    </mesh>
+    {body.name === "Earth" && showDecorativeGlow(accuracyMode) && (
+      <mesh scale={[1.03, 1.03, 1.03]}>
+        <sphereGeometry args={[r, 24, 24]} />
+        <meshBasicMaterial color="#6eb5ff" transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} />
+      </mesh>
+    )}
+    {body.name === "Jupiter" && showDecorativeGlow(accuracyMode) && (
+      <mesh scale={[1.001, 1.001, 1.001]}>
+        <sphereGeometry args={[r, 32, 32]} />
+        <meshStandardMaterial color="#c49560" transparent opacity={decorativeOpacity(0.18, accuracyMode)} roughness={1} depthWrite={false} />
+      </mesh>
+    )}
+  </group>
+);
+
 /* -------------------------------- a Planet -------------------------------- */
 const Planet = ({
   body,
@@ -438,6 +480,8 @@ const Planet = ({
     if (dropRef.current) dropRef.current.position.set(x, 0, z);
   });
 
+  const modelUrl = PLANET_MODEL_URL[body.name];
+  const modelRotation = PLANET_MODEL_ROTATION[body.name];
   const showLabel = !isDwarf || showMinor;
   const pickHandlers = {
     onClick: (e: ThreeEvent<MouseEvent>) => {
@@ -500,30 +544,36 @@ const Planet = ({
               </group>
             )}
 
-            <group ref={spinRef} scale={oblate}>
-              <mesh {...pickHandlers}>
-                <sphereGeometry args={[r, 32, 32]} />
-                <meshStandardMaterial
-                  color={body.color}
-                  emissive={body.emissive ?? "#000000"}
-                  emissiveIntensity={body.emissive ? 0.5 : 0}
-                  roughness={body.name === "Jupiter" || body.name === "Saturn" ? 0.75 : 0.85}
-                  metalness={body.name === "Mercury" || body.name === "Venus" ? 0.12 : 0.05}
+            <group ref={spinRef}>
+              {modelUrl ? (
+                <>
+                  <GltfWithFallback
+                    url={modelUrl}
+                    targetSize={r * 2}
+                    rotation={modelRotation}
+                    fallback={
+                      <PlanetProcedural
+                        r={r}
+                        body={body}
+                        oblate={oblate}
+                        pickHandlers={pickHandlers}
+                        accuracyMode={accuracyMode}
+                      />
+                    }
+                  />
+                  <mesh {...pickHandlers} visible={false}>
+                    <sphereGeometry args={[r * 1.15, 12, 12]} />
+                    <meshBasicMaterial transparent opacity={0} />
+                  </mesh>
+                </>
+              ) : (
+                <PlanetProcedural
+                  r={r}
+                  body={body}
+                  oblate={oblate}
+                  pickHandlers={pickHandlers}
+                  accuracyMode={accuracyMode}
                 />
-              </mesh>
-
-              {body.name === "Earth" && showDecorativeGlow(accuracyMode) && (
-                <mesh scale={[1.03, 1.03, 1.03]}>
-                  <sphereGeometry args={[r, 24, 24]} />
-                  <meshBasicMaterial color="#6eb5ff" transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} />
-                </mesh>
-              )}
-
-              {body.name === "Jupiter" && showDecorativeGlow(accuracyMode) && (
-                <mesh scale={[1.001, 1.001, 1.001]}>
-                  <sphereGeometry args={[r, 32, 32]} />
-                  <meshStandardMaterial color="#c49560" transparent opacity={decorativeOpacity(0.18, accuracyMode)} roughness={1} depthWrite={false} />
-                </mesh>
               )}
             </group>
           </>
@@ -547,15 +597,13 @@ const Planet = ({
 };
 
 /* --------------------------------- a Moon --------------------------------- */
-const moonSceneRadius = (parent: Body, m: Moon) =>
-  scaleRadiusKm(parent.radiusKm) + 0.5 + 0.85 * Math.log10(1 + m.aKm / 50000);
-
 const MoonBody = ({
   moon,
   parent,
   clock,
   show,
   trueMoonPeriods,
+  accuracyMode,
   onFocus,
 }: {
   moon: Moon;
@@ -563,11 +611,12 @@ const MoonBody = ({
   clock: React.MutableRefObject<SimClock>;
   show: boolean;
   trueMoonPeriods: boolean;
+  accuracyMode: AccuracyMode;
   onFocus: (name: string) => void;
 }) => {
   const ref = useRef<THREE.Group>(null);
-  const localR = moonSceneRadius(parent, moon);
-  const r = Math.max(0.08, scaleRadiusKm(moon.radiusKm) * 0.8);
+  const localR = moonOrbitSceneRadius(parent.radiusKm, moon.aKm);
+  const r = moonMeshSceneRadius(parent.radiusKm, moon.radiusKm, accuracyMode);
   const incl = (moon.inclDeg * Math.PI) / 180;
 
   const rate = useMemo(
@@ -586,25 +635,42 @@ const MoonBody = ({
     ref.current.position.set(px + lx, py + ly, pz + lz);
   });
 
+  const moonUrl = MOON_MODEL_URL[moon.name];
+  const moonRotation = MOON_MODEL_ROTATION[moon.name];
+  const moonPick = {
+    onClick: (e: ThreeEvent<MouseEvent>) => {
+      e.stopPropagation();
+      onFocus(moon.name);
+    },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      document.body.style.cursor = "pointer";
+    },
+    onPointerOut: () => {
+      document.body.style.cursor = "auto";
+    },
+  };
+  const moonFallback = (
+    <mesh {...moonPick}>
+      <sphereGeometry args={[r, 28, 28]} />
+      <meshStandardMaterial color={moon.color} roughness={0.9} />
+    </mesh>
+  );
+
   if (!show) return null;
   return (
     <group ref={ref}>
-      <mesh
-        onClick={(e) => {
-          e.stopPropagation();
-          onFocus(moon.name);
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = "auto";
-        }}
-      >
-        <sphereGeometry args={[r, 28, 28]} />
-        <meshStandardMaterial color={moon.color} roughness={0.9} />
-      </mesh>
+      {moonUrl ? (
+        <>
+          <GltfWithFallback url={moonUrl} targetSize={r * 2} rotation={moonRotation} fallback={moonFallback} />
+          <mesh {...moonPick} visible={false}>
+            <sphereGeometry args={[r * 1.2, 12, 12]} />
+            <meshBasicMaterial transparent opacity={0} />
+          </mesh>
+        </>
+      ) : (
+        moonFallback
+      )}
       <Html position={[0, r + 0.35, 0]} center distanceFactor={26} className="ss-label">
         <button
           onClick={() => onFocus(moon.name)}
@@ -1198,6 +1264,7 @@ const NearbyStars = ({
   clock,
   scrubYears,
   showMinor,
+  showExoSystems,
   focusName,
   destinationName,
   trueMoonPeriods,
@@ -1208,6 +1275,7 @@ const NearbyStars = ({
   onFocus: (name: string) => void;
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
+  showExoSystems: boolean;
   focusName: string | null;
   destinationName: string | null;
   trueMoonPeriods: boolean;
@@ -1294,19 +1362,31 @@ const NearbyStars = ({
                 {star.name} · {star.distance} ly
               </button>
             </Html>
-            {/* known exoplanets — visible when zoomed in or when this star is focused */}
-            {EXOPLANETS.filter((e) => e.host === star.name).map((e) => (
-              <ExoPlanetBody
-                key={e.name}
-                exo={e}
-                starSize={size}
-                clock={clock}
-                show={showMinor || focusName === star.name}
-                truePeriods={trueMoonPeriods}
-                onFocus={onFocus}
-                accuracyMode={accuracyMode}
-              />
-            ))}
+            {/* Tier A curated exoplanets + Tier B archive instances */}
+            {(showMinor || focusName === star.name) && showExoSystems && (
+              <>
+                {EXOPLANETS.filter((e) => e.host === star.name).map((e) => (
+                  <ExoPlanetBody
+                    key={e.name}
+                    exo={e}
+                    starSize={size}
+                    clock={clock}
+                    show
+                    truePeriods={trueMoonPeriods}
+                    onFocus={onFocus}
+                    accuracyMode={accuracyMode}
+                  />
+                ))}
+                <ExoplanetInstances
+                  host={star.name}
+                  starSize={size}
+                  planets={archivePlanetsForHost(star.name)}
+                  clock={clock}
+                  show
+                  truePeriods={trueMoonPeriods}
+                />
+              </>
+            )}
           </group>
         );
       })}
@@ -1675,9 +1755,11 @@ const Scene = ({
   isMobile,
   sceneQuality,
   missionHudActive,
+  showExoSystems,
 }: {
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
+  showExoSystems: boolean;
   setShowMinor: (v: boolean) => void;
   birthDate: string;
   lightYears: number;
@@ -1727,6 +1809,7 @@ const Scene = ({
           clock={clock}
           show={showMinor}
           trueMoonPeriods={trueMoonPeriods}
+          accuracyMode={accuracyMode}
           onFocus={onFocus}
         />
       );
@@ -1788,6 +1871,7 @@ const Scene = ({
       onFocus={onFocus}
       clock={clock}
       showMinor={showMinor}
+      showExoSystems={showExoSystems}
       focusName={focusName}
       destinationName={destination}
       trueMoonPeriods={trueMoonPeriods}
@@ -1882,6 +1966,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     const camRef = useRef<THREE.Camera | null>(null);
 
     const [showMinor, setShowMinor] = useState(false);
+    const [showExoSystems, setShowExoSystems] = useState(true);
     const [speed, setSpeed] = useState(0.1);
     const [scrubYears, setScrubYears] = useState<number | null>(null); // timeline scrubber
     const isMobile = useIsMobile();
@@ -2015,6 +2100,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
           <Scene
             clock={clock}
             showMinor={showMinor}
+            showExoSystems={showExoSystems}
             setShowMinor={setShowMinor}
             birthDate={birthDate}
             lightYears={lightYears}
@@ -2246,6 +2332,15 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                 </div>
               ))}
             </div>
+            {NEARBY_STARS.some((s) => s.name === detail.name) && confirmedPlanetCount(detail.name) > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowExoSystems((v) => !v)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] py-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-white/[0.08]"
+              >
+                {showExoSystems ? "Hide system planets" : "Show system planets"}
+              </button>
+            )}
             {isNavStar(detail.name) && onSetMissionDestination && (
               <button
                 type="button"

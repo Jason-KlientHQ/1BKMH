@@ -18,6 +18,8 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### 3D solar system
 - Planets, moons, dwarf planets, comets, spacecraft (NASA glTF models + procedural fallbacks)
+- **NASA planet meshes** — Earth, Moon, Mars, Jupiter, Saturn (vendored under `public/models/nasa/`)
+- **Proportional moon scaling** — educational mode uses physical parent/moon radius ratios; cinematic adds a small readability boost
 - Asteroid & Kuiper belts, heliosphere, schematic Local Bubble, Oort cloud
 - Real **J2000 Keplerian** orbits with correct relative speeds
 - **Educational mode** — true moon/exoplanet periods and accuracy badges (`?accuracy=edu`)
@@ -26,6 +28,7 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### Stars & cosmos
 - **~47 featured** bright/nearby stars (shader glow, curated stories) plus **~350** HYG catalog stars
+- **Exoplanet systems** — 31 curated worlds with stories + instanced archive planets from the [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/) when zoomed in; star panels show confirmed counts
 - Famous giants: Betelgeuse, Antares, Rigel, Deneb, Orion's Belt, Canopus, Polaris, and more
 - **Zoom-aware sizing** — distant stars stay readable on the map; catalog stars have magnitude-based floors
 - **Proper motion** — star positions drift with simulation time and life-timeline scrub
@@ -67,7 +70,7 @@ Example: `https://1bkmh.com/?b=2000-01-01&dest=Proxima%20Centauri&mode=sublight&
 - **React 18** + **TypeScript** + **Vite**
 - **Three.js** / **React Three Fiber** / **Drei** for the 3D scene
 - **Tailwind CSS** with a custom deep-space design system
-- **Vitest** (97 unit tests) + **Playwright** (2 e2e tests)
+- **Vitest** unit tests + **Playwright** (2 e2e tests)
 - **Cloudflare Workers** — static assets + www → apex redirect
 - **Code-split bundles** — lazy `scene`, `mission-ui`, `readme`, `three`, `r3f` chunks (~14 KB gzip main entry)
 
@@ -77,6 +80,7 @@ Example: `https://1bkmh.com/?b=2000-01-01&dest=Proxima%20Centauri&mode=sublight&
 npm install
 npm run dev        # http://localhost:8080
 npm test           # Vitest unit tests
+npm run fetch-exoplanets  # Refresh NASA Exoplanet Archive snapshot
 npm run test:e2e   # Playwright (starts dev server)
 npm run lint       # ESLint
 npm run build      # production build → dist/

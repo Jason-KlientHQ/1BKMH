@@ -1,4 +1,5 @@
 import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER, SPACECRAFT, EXOTIC_OBJECTS, COSMIC_LANDMARKS, LOCAL_BUBBLE } from "@/data/solarSystem";
+import { confirmedPlanetCount, exoplanetDisplayNote, EXOPLANET_CATALOG } from "@/data/exoplanetCatalog";
 import { STAR_CATALOG } from "@/data/starCatalog";
 import {
   PULSAR_PERIOD_SEC,
@@ -178,21 +179,35 @@ export function getBodyInfo(name: string): BodyDetail | null {
     const stage = stellarLifeStage(s.spectral, s.radiusSolar);
     const stageNote = lifeStageNote(stage, s.radiusSolar);
     const rot = rotationPeriodDays(name, s.spectral);
+    const exoCount = confirmedPlanetCount(name);
+    const curatedCount = EXOPLANETS.filter((e) => e.host === name).length;
+    const visibleCount = Math.min(exoCount, curatedCount + 50);
+    const exoNote = exoplanetDisplayNote(name, visibleCount);
+    const stats = [
+      { label: "Distance", value: `${s.distance} ly` },
+      { label: "Life stage", value: stage },
+      { label: "Rotation", value: formatRotationPeriod(rot.days, rot.source) },
+      { label: "Parallax", value: `${parallaxMas(s.distance).toFixed(2)} mas` },
+      { label: "Radius", value: `${s.radiusSolar.toFixed(2)} R☉` },
+      { label: "Mass", value: `${mass.toFixed(2)} M☉` },
+    ];
+    if (exoCount > 0) {
+      stats.push({ label: "Exoplanets", value: `${exoCount} confirmed` });
+    }
     return {
       name,
       type: `${stage} · ${s.spectral}`,
       blurb: s.desc,
-      stats: [
-        { label: "Distance", value: `${s.distance} ly` },
-        { label: "Life stage", value: stage },
-        { label: "Rotation", value: formatRotationPeriod(rot.days, rot.source) },
-        { label: "Parallax", value: `${parallaxMas(s.distance).toFixed(2)} mas` },
-        { label: "Radius", value: `${s.radiusSolar.toFixed(2)} R☉` },
-        { label: "Mass", value: `${mass.toFixed(2)} M☉` },
-      ],
+      stats,
       lightSeconds: s.distance * SEC_PER_LY,
       lightTravelNote: starLightTravelNote(s.distance),
-      scienceNote: [parallaxExplainer(s.distance), stageNote, "Position drifts with simulation time (proper motion)."].filter(Boolean).join(" "),
+      scienceNote: [
+        parallaxExplainer(s.distance),
+        stageNote,
+        exoNote,
+        exoCount > 0 ? `~${EXOPLANET_CATALOG.galaxyTotal.toLocaleString("en-US")} worlds confirmed galaxy-wide (archive snapshot ${EXOPLANET_CATALOG.fetchedAt}).` : null,
+        "Position drifts with simulation time (proper motion).",
+      ].filter(Boolean).join(" "),
       links,
     };
   }
