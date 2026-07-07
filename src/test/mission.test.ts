@@ -63,6 +63,28 @@ describe("mission URL", () => {
     expect(q).toBe("");
   });
 
+  it("round-trips hull preset in URL", () => {
+    const params = new URLSearchParams("dest=Sirius&hull=falcon-freighter");
+    const mission = parseMissionParams(params);
+    expect(mission.vessel.hullId).toBe("falcon-freighter");
+
+    const q = buildAppShareQuery({
+      mission: {
+        origin: "sun",
+        destination: "Sirius",
+        mode: "sublight",
+        vessel: { ...DEFAULT_VESSEL, hullId: "falcon-freighter" },
+      },
+    });
+    expect(q).toContain("hull=falcon-freighter");
+    expect(parseMissionParams(new URLSearchParams(q.slice(1))).vessel.hullId).toBe("falcon-freighter");
+  });
+
+  it("ignores invalid hull param", () => {
+    const mission = parseMissionParams(new URLSearchParams("hull=not-a-real-hull"));
+    expect(mission.vessel.hullId).toBe(DEFAULT_VESSEL.hullId);
+  });
+
   it("includes fly=1 when sharing an in-flight mission", () => {
     const q = buildAppShareQuery({
       mission: {

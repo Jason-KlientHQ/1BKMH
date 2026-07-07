@@ -64,7 +64,7 @@ import {
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePositionAtEpoch } from "@/astrometry/properMotion";
-import { GltfWithFallback, preloadNasaModels } from "@/components/GltfModel";
+import { GltfWithFallback, preloadNasaModels, preloadVesselModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { NASA_GLTF } from "@/data/nasaModels";
 import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
@@ -339,6 +339,7 @@ const Sun = ({ onFocus, accuracyMode }: { onFocus: (name: string) => void; accur
 const SATURN_RING_TILT = (26.73 * Math.PI) / 180;
 
 preloadNasaModels();
+preloadVesselModels();
 
 const SaturnProcedural = ({
   r,

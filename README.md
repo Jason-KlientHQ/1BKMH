@@ -54,6 +54,7 @@ Light travels one light-year per year. If a beam left the moment you were born a
 | `dest` | `&dest=Betelgeuse` | Mission destination star |
 | `mode` | `&mode=nuclear` | Propulsion mode |
 | `origin` | `&origin=earth` | Departure body (`sun` default) |
+| `hull` | `&hull=falcon-freighter` | Mission craft hull preset (see `src/data/vesselPresets.ts`) |
 | `mass`, `fuel`, `isp`, `thrust`, `sail`, `sublight`, `warp` | vessel tuning | See `src/mission/types.ts` |
 | `fly` | `&fly=1` | Auto-start cinematic flight on load |
 | `accuracy` | `&accuracy=edu` | Educational mode (true periods, accuracy badges) |

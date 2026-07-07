@@ -1,0 +1,26 @@
+Mission vessel 3D models
+
+Voyager probe (voyager-probe hull)
+  Source: NASA 3D Resources — Voyager Probe (A)
+  License: NASA media usage guidelines / public domain
+  File: ../nasa/voyager.glb
+  https://github.com/nasa/NASA-3D-Resources
+
+Sci-fi-inspired hull presets (constitution-cruiser, falcon-freighter, discovery-monolith,
+x-wing-fighter, serenity-freighter, normandy-frigate, borg-cube, battlestar-carrier,
+imperial-sphere)
+  Source: Kenney Space Kit 2.0 (www.kenney.nl)
+  License: Creative Commons Zero (CC0) 1.0
+  https://creativecommons.org/publicdomain/zero/1.0/
+  Asset pack: https://kenney.nl/assets/space-kit
+
+  Kenney OBJ → GLB mapping (inspired-by silhouettes, not franchise replicas):
+    constitution-cruiser  ← craft_speederC
+    falcon-freighter      ← craft_cargoB
+    discovery-monolith    ← craft_miner
+    x-wing-fighter        ← craft_racer
+    serenity-freighter    ← craft_cargoA
+    normandy-frigate      ← craft_speederD
+    borg-cube             ← hangar_smallA
+    battlestar-carrier    ← hangar_largeA
+    imperial-sphere       ← hangar_roundGlass

@@ -59,3 +59,43 @@ export function rotationPeriodDays(name: string, spect?: string): { days: number
 
   return { days: 25, source: "estimated" };
 }
+
+const SOURCE_LABEL: Record<"measured" | "estimated", string> = {
+  measured: "measured",
+  estimated: "estimated from spectral type",
+};
+
+/** Human-readable rotation period for detail panels (e.g. "25.1 d · measured"). */
+export function formatRotationPeriod(days: number, source: "measured" | "estimated"): string {
+  const prefix = source === "measured" ? "" : "~";
+  const label = SOURCE_LABEL[source];
+
+  if (days < 1 / 24) {
+    const sec = days * 86_400;
+    const value = sec < 10 ? sec.toFixed(2) : sec.toFixed(0);
+    return `${prefix}${value} s · ${label}`;
+  }
+  if (days < 1) {
+    const hrs = days * 24;
+    return `${prefix}${hrs.toFixed(1)} h · ${label}`;
+  }
+  if (days >= 365) {
+    const yrs = days / 365.25;
+    const value = yrs >= 10 ? yrs.toFixed(0) : yrs.toFixed(1);
+    return `${prefix}${value} yr · ${label}`;
+  }
+  const raw = days >= 100 ? days.toFixed(0) : days.toFixed(1);
+  const value = raw.endsWith(".0") ? raw.slice(0, -2) : raw;
+  return `${prefix}${value} d · ${label}`;
+}
+
+/** Pulsar / magnetar spin for detail panels. */
+export function formatPulsarPeriod(sec: number): string {
+  if (sec < 1) return `${(sec * 1000).toFixed(0)} ms · measured`;
+  return `${sec.toFixed(2)} s · measured`;
+}
+
+/** Accretion-disk visual period for quasars (illustrative). */
+export function formatQuasarDiskPeriod(days: number): string {
+  return `~${days.toFixed(1)} d · illustrative disk spin`;
+}

@@ -2,10 +2,17 @@ import { Component, Suspense, useMemo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { NASA_GLTF } from "@/data/nasaModels";
+import { VESSEL_GLTF } from "@/data/vesselModels";
 
 /** Preload NASA assets once the bundle loads (inside Canvas context). */
 export function preloadNasaModels() {
   Object.values(NASA_GLTF).forEach((url) => useGLTF.preload(url));
+}
+
+/** Preload mission hull glTF assets (Kenney + NASA Voyager). */
+export function preloadVesselModels() {
+  Object.values(VESSEL_GLTF).forEach((url) => useGLTF.preload(url));
+  useGLTF.preload(NASA_GLTF.voyager);
 }
 
 function normalizeObject(object: THREE.Object3D, targetSize: number): THREE.Object3D {

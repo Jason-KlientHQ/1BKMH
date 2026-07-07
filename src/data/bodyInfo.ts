@@ -1,5 +1,13 @@
 import { PLANETS, MOONS, NEARBY_STARS, COMETS, BLACK_HOLES, EXOPLANETS, ROADSTER, SPACECRAFT, EXOTIC_OBJECTS, COSMIC_LANDMARKS, LOCAL_BUBBLE } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
+import {
+  PULSAR_PERIOD_SEC,
+  QUASAR_DISK_PERIOD_DAYS,
+  formatPulsarPeriod,
+  formatQuasarDiskPeriod,
+  formatRotationPeriod,
+  rotationPeriodDays,
+} from "@/data/stellarRotation";
 
 import { SEC_PER_AU, SEC_PER_LY } from "@/lib/constants"; // derived from c = 1,079,252,848.8 km/h
 import {
@@ -114,6 +122,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
   const links = { grokipedia: grokipediaUrl(name), nasa: nasaUrl(name) };
 
   if (name === "Sun") {
+    const sunRot = rotationPeriodDays("Sun");
     return {
       name,
       type: "G2V main-sequence star",
@@ -121,6 +130,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
       stats: [
         { label: "Radius", value: "696,000 km" },
         { label: "Surface", value: "~5,500°C" },
+        { label: "Rotation", value: formatRotationPeriod(sunRot.days, sunRot.source) },
         { label: "Age", value: "4.6 billion yr" },
       ],
       lightSeconds: 0,
@@ -167,6 +177,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
     const mass = resolveMassSolar(name, s.radiusSolar, s.spectral);
     const stage = stellarLifeStage(s.spectral, s.radiusSolar);
     const stageNote = lifeStageNote(stage, s.radiusSolar);
+    const rot = rotationPeriodDays(name, s.spectral);
     return {
       name,
       type: `${stage} · ${s.spectral}`,
@@ -174,6 +185,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
       stats: [
         { label: "Distance", value: `${s.distance} ly` },
         { label: "Life stage", value: stage },
+        { label: "Rotation", value: formatRotationPeriod(rot.days, rot.source) },
         { label: "Parallax", value: `${parallaxMas(s.distance).toFixed(2)} mas` },
         { label: "Radius", value: `${s.radiusSolar.toFixed(2)} R☉` },
         { label: "Mass", value: `${mass.toFixed(2)} M☉` },
@@ -241,11 +253,22 @@ export function getBodyInfo(name: string): BodyDetail | null {
 
   const ex = EXOTIC_OBJECTS.find((b) => b.name === name);
   if (ex) {
+    const rotationStat = (() => {
+      if (ex.kind === "pulsar") {
+        const sec = PULSAR_PERIOD_SEC[ex.name];
+        if (sec != null) return { label: "Rotation", value: formatPulsarPeriod(sec) };
+      }
+      if (ex.kind === "quasar") {
+        return { label: "Disk spin", value: formatQuasarDiskPeriod(QUASAR_DISK_PERIOD_DAYS) };
+      }
+      return null;
+    })();
+    const stats = rotationStat ? [...ex.stats, rotationStat] : ex.stats;
     return {
       name,
       type: ex.typeLabel,
       blurb: ex.desc,
-      stats: ex.stats,
+      stats,
       lightSeconds: ex.distance * SEC_PER_LY,
       links,
     };
@@ -288,6 +311,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
     const mass = resolveMassSolar(cat.name, cat.r, cat.spect);
     const stage = stellarLifeStage(cat.spect, cat.r);
     const stageNote = lifeStageNote(stage, cat.r);
+    const rot = rotationPeriodDays(cat.name, cat.spect !== "—" ? cat.spect : undefined);
     const kind = /^(HD|HIP|Gliese)/.test(cat.name) ? "Catalog star" : "Star";
     const isGiant = cat.r >= 10;
     const sizePhrase = cat.r >= 100 ? "supergiant" : isGiant ? "giant" : "star";
@@ -299,6 +323,7 @@ export function getBodyInfo(name: string): BodyDetail | null {
       stats: [
         { label: "Distance", value: `${cat.ly} ly` },
         { label: "Life stage", value: stage },
+        { label: "Rotation", value: formatRotationPeriod(rot.days, rot.source) },
         { label: "Parallax", value: `${parallaxMas(cat.ly).toFixed(2)} mas` },
         { label: "Radius", value: `~${cat.r.toLocaleString("en-US")} R☉` },
         { label: "Mass", value: `~${mass.toFixed(2)} M☉` },
