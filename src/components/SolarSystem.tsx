@@ -71,6 +71,7 @@ import { catalogStarRender, featuredStarRender } from "@/stellar/helpers";
 import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
 import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useSceneQuality, type SceneQuality } from "@/hooks/useSceneQuality";
 import { MissionRoute } from "@/components/MissionRoute";
 import { MissionFlight } from "@/components/MissionFlight";
 import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
@@ -1025,19 +1026,25 @@ const CatalogStars = ({
   clock,
   scrubYears,
   lightYears,
+  sceneQuality,
 }: {
   onFocus: (name: string) => void;
   clock: React.MutableRefObject<SimClock>;
   scrubYears: number | null;
   lightYears: number;
+  sceneQuality: SceneQuality;
 }) => {
   const { camera } = useThree();
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hoverGroupRef = useRef<THREE.Group>(null);
   const list = useMemo(() => {
     const featured = new Set(NEARBY_STARS.map((s) => s.name.toLowerCase()));
-    return STAR_CATALOG.filter((s) => !featured.has(s.name.toLowerCase()));
-  }, []);
+    return STAR_CATALOG.filter((s) => {
+      if (featured.has(s.name.toLowerCase())) return false;
+      if (sceneQuality.catalogMagLimit != null && s.mag > sceneQuality.catalogMagLimit) return false;
+      return true;
+    });
+  }, [sceneQuality.catalogMagLimit]);
   const sizes = useMemo(() => list.map((s) => catalogStarRender(s).size), [list]);
   const [hover, setHover] = useState(-1);
 
@@ -1081,7 +1088,7 @@ const CatalogStars = ({
         onPointerMove={(e) => { e.stopPropagation(); if (e.instanceId != null) { setHover(e.instanceId); document.body.style.cursor = "pointer"; } }}
         onPointerOut={() => { setHover(-1); document.body.style.cursor = "auto"; }}
       >
-        <sphereGeometry args={[1, 24, 24]} />
+        <sphereGeometry args={[1, sceneQuality.catalogSphereSegments, sceneQuality.catalogSphereSegments]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
       {hoverStar && (
@@ -1559,6 +1566,7 @@ const Scene = ({
   missionMode,
   missionOrigin,
   isMobile,
+  sceneQuality,
   missionHudActive,
 }: {
   clock: React.MutableRefObject<SimClock>;
@@ -1570,6 +1578,7 @@ const Scene = ({
   displayLY: number;
   trueMoonPeriods: boolean;
   isMobile: boolean;
+  sceneQuality: SceneQuality;
   missionHudActive: boolean;
   animatingLight: boolean;
   setAnimatingLight: (v: boolean) => void;
@@ -1588,8 +1597,8 @@ const Scene = ({
   <>
     <ambientLight intensity={0.25} />
     {/* layered, denser, faintly-coloured starfield — more wonder */}
-    <Stars radius={4000} depth={600} count={isMobile ? 5000 : 16000} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
-    <Stars radius={9000} depth={200} count={isMobile ? 2500 : 7000} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
+    <Stars radius={4000} depth={600} count={sceneQuality.backgroundStarCounts[0]} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
+    <Stars radius={9000} depth={200} count={sceneQuality.backgroundStarCounts[1]} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
     <TimeKeeper clock={clock} onZoom={setShowMinor} birthDate={birthDate} lifeYears={lightYears} scrubYears={scrubYears} />
 
     <EclipticGrid />
@@ -1649,7 +1658,7 @@ const Scene = ({
     ) : (
       <MissionRoute destination={destination} />
     )}
-    <CatalogStars onFocus={onFocus} clock={clock} scrubYears={scrubYears} lightYears={lightYears} />
+    <CatalogStars onFocus={onFocus} clock={clock} scrubYears={scrubYears} lightYears={lightYears} sceneQuality={sceneQuality} />
     <NearbyStars
       lightYears={displayLY}
       scrubYears={scrubYears}
@@ -1750,6 +1759,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     const [speed, setSpeed] = useState(0.1);
     const [scrubYears, setScrubYears] = useState<number | null>(null); // timeline scrubber
     const isMobile = useIsMobile();
+    const sceneQuality = useSceneQuality();
     const missionHudActive = !!(missionResult && destination);
     const [paused, setPaused] = useState(false);
     const [animatingLight, setAnimatingLight] = useState(false);
@@ -1867,7 +1877,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       <div ref={containerRef} className="relative h-full w-full touch-none overflow-hidden bg-[#04050c]">
         <Canvas
           camera={{ position: [70, 46, 70], fov: isMobile ? 60 : CAMERA_FOV, near: 0.02, far: 60_000 }}
-          dpr={[1, isMobile ? 1.25 : 2]}
+          dpr={[1, sceneQuality.dprMax]}
           gl={{ preserveDrawingBuffer: true }}
           onCreated={({ gl, scene, camera }) => {
             glRef.current = gl;
@@ -1899,6 +1909,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             missionMode={missionMode}
             missionOrigin={missionOrigin}
             isMobile={isMobile}
+            sceneQuality={sceneQuality}
             missionHudActive={missionHudActive}
           />
         </Canvas>

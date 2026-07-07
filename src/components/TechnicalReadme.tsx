@@ -169,6 +169,16 @@ gravity_assist  → Jupiter (+9.2 km/s) + Saturn (+4.8 km/s) flybys,
             <p className="mt-5 border-t border-white/10 pt-4 text-[11px] text-muted-foreground/60">
               Built for wonder, grounded in real numbers. Distances and dates are
               accurate to the physics above; the visuals are honestly compressed.
+              Built with assistance from{" "}
+              <a
+                href="https://x.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary/80 underline decoration-dotted underline-offset-2 hover:text-primary"
+              >
+                xAI Grok
+              </a>
+              .
             </p>
           </div>
         </div>

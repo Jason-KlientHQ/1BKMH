@@ -20,10 +20,14 @@ Light travels one light-year per year. If a beam left the moment you were born a
 - Planets, moons, dwarf planets, comets, spacecraft (NASA glTF models + procedural fallbacks)
 - Asteroid & Kuiper belts, heliosphere, schematic Local Bubble, Oort cloud
 - Real **J2000 Keplerian** orbits with correct relative speeds
+- **Educational mode** — true moon/exoplanet periods and accuracy badges (`?accuracy=edu`)
+- **True orbits toggle** — cinematic vs real periods for moons and exoplanets (`?orbits=1`)
+- **LEO spacecraft** — ISS and Hubble use play-time LEO phase (not birth-epoch spin)
 
 ### Stars & cosmos
 - **~47 featured** bright/nearby stars (shader glow, curated stories) plus **~350** HYG catalog stars
 - Famous giants: Betelgeuse, Antares, Rigel, Deneb, Orion's Belt, Canopus, Polaris, and more
+- **Zoom-aware sizing** — distant stars stay readable on the map; catalog stars have magnitude-based floors
 - **Proper motion** — star positions drift with simulation time and life-timeline scrub
 - **Life stage & parallax** stats on star detail panels
 - **Cosmic landmarks** — Andromeda, Magellanic Clouds, Galactic Center (compressed map placement)
@@ -37,9 +41,9 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### Interaction
 - Pause/speed, flythrough, PNG export, click-for-details
-- Explore menu for spacecraft, bright stars, cosmic landmarks, black holes
+- Explore menu (portal overlay) for spacecraft, bright stars, cosmic landmarks, black holes
 - In-app **"How this works"** modal — full calculation docs
-- **Mobile-friendly** layout — reactive breakpoints, safe-area insets, bottom-sheet navigator
+- **Mobile-friendly** layout — reactive breakpoints, safe-area insets, bottom-sheet navigator, adaptive WebGL quality tier
 
 ## Shareable URL parameters
 
@@ -52,23 +56,27 @@ Light travels one light-year per year. If a beam left the moment you were born a
 | `origin` | `&origin=earth` | Departure body (`sun` default) |
 | `mass`, `fuel`, `isp`, `thrust`, `sail`, `sublight`, `warp` | vessel tuning | See `src/mission/types.ts` |
 | `fly` | `&fly=1` | Auto-start cinematic flight on load |
+| `accuracy` | `&accuracy=edu` | Educational mode (true periods, accuracy badges) |
+| `orbits` | `&orbits=1` | True moon/exoplanet orbital periods |
 
-Example: `https://1bkmh.com/?b=2000-01-01&dest=Proxima%20Centauri&mode=sublight&fly=1`
+Example: `https://1bkmh.com/?b=2000-01-01&dest=Proxima%20Centauri&mode=sublight&fly=1&accuracy=edu&orbits=1`
 
 ## Tech stack
 
 - **React 18** + **TypeScript** + **Vite**
 - **Three.js** / **React Three Fiber** / **Drei** for the 3D scene
 - **Tailwind CSS** with a custom deep-space design system
-- **Vitest** for unit tests (68 tests)
+- **Vitest** (97 unit tests) + **Playwright** (2 e2e tests)
 - **Cloudflare Workers** — static assets + www → apex redirect
+- **Code-split bundles** — lazy `scene`, `mission-ui`, `readme`, `three`, `r3f` chunks (~14 KB gzip main entry)
 
 ## Development
 
 ```bash
 npm install
 npm run dev        # http://localhost:8080
-npm test           # unit tests
+npm test           # Vitest unit tests
+npm run test:e2e   # Playwright (starts dev server)
 npm run lint       # ESLint
 npm run build      # production build → dist/
 ```
@@ -90,9 +98,10 @@ Configuration lives in `wrangler.jsonc` and `worker.js`:
 
 ```
 src/
-  pages/Index.tsx              Hero, stats, 3D viewport, mission UI
+  pages/Index.tsx              Hero, stats, lazy-loaded 3D viewport + mission UI
   components/
     SolarSystem.tsx            3D scene (WebGL)
+    ExploreMenu.tsx            Destination picker (portal overlay)
     MissionPlanner.tsx         Star Navigator panel
     RouteHUD.tsx               Cinematic flight progress
     TechnicalReadme.tsx        Calculation docs modal
@@ -103,15 +112,23 @@ src/
   propulsion/                  Trip physics per drive mode
   data/
     solarSystem.ts             Planets, stars, landmarks, spacecraft
+    exploreGroups.ts           Explore menu groupings
     starCatalog.ts             HYG database (auto-generated)
     properMotion.ts            Gaia/Hipparcos PM by star name
     nasaModels.ts              glTF model paths
   lib/
     constants.ts               Speed of light and derived constants
     lightJourney.ts            Birthday → light-years
-    orbital.ts                   Keplerian mechanics + log-scale mapping
+    orbital.ts                 Keplerian mechanics + log-scale mapping
+    stellarDisplay.ts          Zoom-aware star display sizing
+    accuracyMode.ts            Cinematic vs educational presets
+    simEpoch.ts                Birth-tied orbital epoch
+    earthOrbit.ts              LEO spacecraft positioning
   hooks/
     useMediaQuery.ts           Reactive mobile breakpoint
+    useSceneQuality.ts         Adaptive WebGL quality tier
+e2e/
+  explore-hud.spec.ts          Explore menu + URL restore regression
 public/
   models/nasa/                 Vendored NASA glTF assets (~12 MB)
 ```
@@ -134,14 +151,23 @@ See the in-app **"How this works"** modal or `src/components/TechnicalReadme.tsx
 ## Tests
 
 ```bash
-npm test
+npm test           # 97 Vitest unit tests
+npm run test:e2e   # Playwright HUD regression (explore menu, URL orbits)
 ```
 
-Covers light journey math, URL parsing, Kepler solver, scale mapping, stellar physics, proper motion, mission paths, propulsion modes, featured stars, and cosmic landmarks.
+Covers light journey math, URL parsing, Kepler solver, scale mapping, stellar physics, proper motion, mission paths, propulsion modes, featured stars, cosmic landmarks, scene quality, and explore HUD behavior.
 
 ## Assets
 
 NASA 3D Resources models in `public/models/nasa/` (~12 MB total). Credits in `public/models/nasa/CREDITS.txt`.
+
+## Known limitations
+
+- Distances and body sizes are log-compressed for one zoomable scene — not true scale.
+- Star positions use catalog directions + proper motion; not a full ephemeris integrator.
+- Mission gravity assists use patched conics — good for wonder, not JPL-grade.
+- Asteroid/Kuiper belts rotate as groups, not individual rock orbits.
+- Speculative drives (Alcubierre, sublight) are labeled as hypothetical.
 
 ## Acknowledgments
 
@@ -153,4 +179,4 @@ NASA 3D Resources models in `public/models/nasa/` (~12 MB total). Credits in `pu
 
 ## License
 
-Private project.
+Private project. Issues and contributions via [GitHub](https://github.com/Jason-KlientHQ/birthday-light-journey).
