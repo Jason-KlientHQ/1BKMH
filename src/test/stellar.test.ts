@@ -89,4 +89,14 @@ describe("stellarRenderRadius", () => {
     expect(sirius.size).toBeGreaterThan(proxima.size);
     expect(arcturus.size).toBeGreaterThan(sirius.size);
   });
+
+  it("renders supergiants much larger than red giants after cap raise", () => {
+    const arcturus = featuredStarRender(NEARBY_STARS.find((s) => s.name === "Arcturus")!)!;
+    const betelgeuse = featuredStarRender(NEARBY_STARS.find((s) => s.name === "Betelgeuse")!)!;
+    const rigel = featuredStarRender(NEARBY_STARS.find((s) => s.name === "Rigel")!)!;
+
+    expect(betelgeuse.size).toBeGreaterThan(arcturus.size * 1.8);
+    expect(betelgeuse.size).toBeGreaterThan(rigel.size);
+    expect(betelgeuse.size).toBeLessThanOrEqual(260);
+  });
 });

@@ -11,8 +11,10 @@ export interface StellarRenderInput {
   apparentMag?: number;
 }
 
-const MIN_RENDER = 2.5;
-const MAX_RENDER = 120;
+const MIN_RENDER = 3;
+/** Red supergiants (Betelgeuse ~268 R☉) need headroom above red giants (~45 R☉). */
+const MAX_RENDER = 260;
+const SUPERGIANT_RADIUS = 50;
 
 /**
  * Scene sphere radius for a star. Driven primarily by physical radius (what
@@ -27,7 +29,11 @@ export function stellarRenderRadius(input: StellarRenderInput): number {
   const massTerm = 3 * Math.cbrt(m);
 
   // Luminous giants: Arcturus, Aldebaran read larger than equal-radius dwarfs
-  const giantBoost = r > 8 ? 1 + Math.log10(r / 8) * 0.85 : 1;
+  let giantBoost = r > 8 ? 1 + Math.log10(r / 8) * 0.85 : 1;
+  // Supergiants (Betelgeuse, Deneb) get extra emphasis before the cap
+  if (r >= SUPERGIANT_RADIUS) {
+    giantBoost *= 1 + Math.log10(r / SUPERGIANT_RADIUS) * 0.55;
+  }
 
   let size = (radiusTerm + massTerm * 0.45) * giantBoost;
 

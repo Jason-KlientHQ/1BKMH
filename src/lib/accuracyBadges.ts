@@ -1,4 +1,4 @@
-import { MOONS, SPACECRAFT, COMETS, PLANETS } from "@/data/solarSystem";
+import { MOONS, SPACECRAFT, COMETS, PLANETS, EXOPLANETS } from "@/data/solarSystem";
 import { NEARBY_STARS } from "@/data/solarSystem";
 import { isNavStar } from "@/mission/stars";
 
@@ -17,7 +17,7 @@ export function globalAccuracyBadges(mode: "cinematic" | "educational"): Accurac
   if (mode === "educational") {
     badges.push({
       label: "Educational mode",
-      title: "True moon periods, birth-tied epoch, and proper-motion mission paths are enabled.",
+      title: "True moon and exoplanet periods, birth-tied epoch, and proper-motion mission paths are enabled.",
     });
   }
   return badges;
@@ -52,6 +52,22 @@ export function bodyAccuracyBadges(
           {
             label: "Moon: cinematic",
             title: "Orbital period is compressed for watchability; order and direction are preserved.",
+          },
+        ];
+  }
+
+  if (EXOPLANETS.some((e) => e.name === name)) {
+    return opts.trueMoonPeriods
+      ? [
+          {
+            label: "True period",
+            title: "Exoplanet orbit uses the catalog sidereal period in simulation years.",
+          },
+        ]
+      : [
+          {
+            label: "Exoplanet: cinematic",
+            title: "Orbital period is compressed for watchability; inner worlds move faster than outer ones.",
           },
         ];
   }

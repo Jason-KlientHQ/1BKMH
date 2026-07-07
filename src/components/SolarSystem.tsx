@@ -21,6 +21,11 @@ import {
   type AccuracyMode,
 } from "@/lib/accuracyMode";
 import { bodyAccuracyBadges, globalAccuracyBadges } from "@/lib/accuracyBadges";
+import {
+  EXO_CINEMATIC,
+  MOON_CINEMATIC,
+  siderealOrbitRateRadPerYear,
+} from "@/lib/orbitRate";
 import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
 import { eventForYear } from "@/data/worldEvents";
 import {
@@ -80,18 +85,6 @@ interface SimClock {
 }
 
 const BASE_YEARS_PER_SEC = 0.08; // calmer default (Earth ~12.5s/orbit at 1×)
-
-function moonOrbitRate(periodDays: number, truePeriods: boolean): number {
-  const absDays = Math.abs(periodDays);
-  const dir = periodDays < 0 ? -1 : 1;
-  if (truePeriods) {
-    const periodYears = absDays / 365.25;
-    return ((2 * Math.PI) / periodYears) * dir;
-  }
-  const norm = Math.min(Math.max((Math.log(absDays) - Math.log(1.3)) / (Math.log(80) - Math.log(1.3)), 0), 1);
-  const displaySec = 12 + norm * 40;
-  return ((2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec)) * dir;
-}
 const CAMERA_FOV = 55;
 const HALF_FOV = (CAMERA_FOV * Math.PI) / 180 / 2;
 const MAX_ZOOM = 30_000; // covers the largest light sphere + the nearest stars
@@ -574,7 +567,7 @@ const MoonBody = ({
   const incl = (moon.inclDeg * Math.PI) / 180;
 
   const rate = useMemo(
-    () => moonOrbitRate(moon.periodDays, trueMoonPeriods),
+    () => siderealOrbitRateRadPerYear(moon.periodDays, trueMoonPeriods, MOON_CINEMATIC),
     [moon.periodDays, trueMoonPeriods],
   );
 
@@ -830,22 +823,23 @@ const ExoPlanetBody = ({
   starSize,
   clock,
   show,
+  truePeriods,
   onFocus,
 }: {
   exo: Exoplanet;
   starSize: number;
   clock: React.MutableRefObject<SimClock>;
   show: boolean;
+  truePeriods: boolean;
   onFocus: (name: string) => void;
 }) => {
   const ref = useRef<THREE.Group>(null);
   const localR = starSize * 1.35 + 3 + 5 * Math.log10(1 + exo.aAU / 0.02);
   const r = 0.6 + 0.35 * Math.cbrt(exo.radiusEarth);
-  const rate = useMemo(() => {
-    const norm = Math.min(Math.max((Math.log(exo.periodDays) - Math.log(3)) / (Math.log(3000) - Math.log(3)), 0), 1);
-    const displaySec = 14 + norm * 40;
-    return (2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec);
-  }, [exo.periodDays]);
+  const rate = useMemo(
+    () => siderealOrbitRateRadPerYear(exo.periodDays, truePeriods, EXO_CINEMATIC),
+    [exo.periodDays, truePeriods],
+  );
 
   useFrame(() => {
     if (!ref.current || !show) return;
@@ -1133,6 +1127,7 @@ const NearbyStars = ({
   showMinor,
   focusName,
   destinationName,
+  trueMoonPeriods,
 }: {
   lightYears: number;
   scrubYears: number | null;
@@ -1141,6 +1136,7 @@ const NearbyStars = ({
   showMinor: boolean;
   focusName: string | null;
   destinationName: string | null;
+  trueMoonPeriods: boolean;
 }) => {
   const placed = useMemo(
     () =>
@@ -1216,7 +1212,15 @@ const NearbyStars = ({
             </Html>
             {/* known exoplanets — visible when zoomed in or when this star is focused */}
             {EXOPLANETS.filter((e) => e.host === star.name).map((e) => (
-              <ExoPlanetBody key={e.name} exo={e} starSize={size} clock={clock} show={showMinor || focusName === star.name} onFocus={onFocus} />
+              <ExoPlanetBody
+                key={e.name}
+                exo={e}
+                starSize={size}
+                clock={clock}
+                show={showMinor || focusName === star.name}
+                truePeriods={trueMoonPeriods}
+                onFocus={onFocus}
+              />
             ))}
           </group>
         );
@@ -1674,6 +1678,7 @@ const Scene = ({
       showMinor={showMinor}
       focusName={focusName}
       destinationName={destination}
+      trueMoonPeriods={trueMoonPeriods}
     />
 
     {BLACK_HOLES.map((bh) => (
@@ -1970,12 +1975,12 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               <button
                 type="button"
                 onClick={() => setTrueMoonsManual((v) => !v)}
-                title={trueMoonsManual ? "Moons: true periods" : "Moons: cinematic"}
+                title={trueMoonsManual ? "Moons & exoplanets: true periods" : "Moons & exoplanets: cinematic"}
                 className={`hidden rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors sm:inline-block ${
                   trueMoonsManual ? "bg-beam/15 text-beam" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {trueMoonsManual ? "True moons" : "Cinematic moons"}
+                {trueMoonsManual ? "True orbits" : "Cinematic orbits"}
               </button>
             )}
             {focusName && (
