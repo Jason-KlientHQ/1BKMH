@@ -3,15 +3,17 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { MissionVessel } from "@/components/MissionVessel";
 import { findNavStar } from "@/mission/stars";
 import { buildMissionPath, interpolatePath, pathLineSegments } from "@/mission/path";
-import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
+import type { MissionOrigin, MissionResult, PropulsionMode, VesselConfig } from "@/mission/types";
 
 interface MissionFlightProps {
   destination: string | null;
   missionResult: MissionResult | null;
   mode: PropulsionMode;
   missionOrigin: MissionOrigin;
+  vessel: VesselConfig;
   tripProgress: number;
   missionFlying: boolean;
   simYears: number;
@@ -24,6 +26,7 @@ export const MissionFlight = ({
   missionResult,
   mode,
   missionOrigin,
+  vessel,
   tripProgress,
   missionFlying,
   simYears,
@@ -40,6 +43,16 @@ export const MissionFlight = ({
     () => (path ? interpolatePath(path, tripProgress) : null),
     [path, tripProgress],
   );
+  const vesselHeading = useMemo(() => {
+    if (!path) return [0, 0, 1] as [number, number, number];
+    const ahead = interpolatePath(path, Math.min(1, tripProgress + 0.02));
+    if (!vesselPos) return ahead;
+    const dx = ahead[0] - vesselPos[0];
+    const dy = ahead[1] - vesselPos[1];
+    const dz = ahead[2] - vesselPos[2];
+    const len = Math.hypot(dx, dy, dz) || 1;
+    return [vesselPos[0] + dx / len, vesselPos[1] + dy / len, vesselPos[2] + dz / len] as [number, number, number];
+  }, [path, tripProgress, vesselPos]);
 
   if (!path || !vesselPos) return null;
 
@@ -48,7 +61,7 @@ export const MissionFlight = ({
       <Line points={linePoints} color="#2fe0c0" lineWidth={2.5} transparent opacity={0.65} depthWrite={false} />
       <Line points={linePoints} color="#ffd166" lineWidth={1} transparent opacity={0.2} depthWrite={false} />
       <VesselTrail path={path} tripProgress={tripProgress} missionFlying={missionFlying} destination={destination} />
-      <VesselMarker position={vesselPos} />
+      <MissionVessel position={vesselPos} heading={vesselHeading} hullId={vessel.hullId} />
       <MissionChaseCamera
         path={path}
         tripProgress={tripProgress}
@@ -107,29 +120,6 @@ const VesselTrail = ({
       opacity={0.45}
       depthWrite={false}
     />
-  );
-};
-
-const VesselMarker = ({ position }: { position: [number, number, number] }) => {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const s = 1 + Math.sin(clock.getElapsedTime() * 4) * 0.15;
-    ref.current.scale.setScalar(s);
-  });
-
-  return (
-    <group position={position}>
-      <mesh ref={ref}>
-        <octahedronGeometry args={[3.5, 0]} />
-        <meshBasicMaterial color="#ffd166" toneMapped={false} />
-      </mesh>
-      <mesh>
-        <sphereGeometry args={[8, 16, 16]} />
-        <meshBasicMaterial color="#2fe0c0" transparent opacity={0.25} depthWrite={false} />
-      </mesh>
-      <pointLight color="#2fe0c0" intensity={2} distance={80} />
-    </group>
   );
 };
 

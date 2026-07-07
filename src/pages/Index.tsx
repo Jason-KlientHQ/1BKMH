@@ -483,6 +483,7 @@ const SolarSystemSection = ({
             missionFlying={missionFlying}
             missionMode={mission.mode}
             missionOrigin={mission.origin}
+            missionVessel={mission.vessel}
             onDestinationSelect={(name) =>
               onMissionChange({ ...mission, destination: name })
             }
@@ -500,6 +501,7 @@ const SolarSystemSection = ({
 
       {missionResult && mission.destination && (
         <RouteHUD
+          origin={mission.origin}
           destination={mission.destination}
           result={missionResult}
           progress={tripProgress}

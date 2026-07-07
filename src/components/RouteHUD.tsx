@@ -1,8 +1,9 @@
 import { Pause, Play, Square } from "lucide-react";
-import { etaRemainingLabel, fuelRemainingKg, legAtProgress } from "@/mission/path";
-import type { MissionResult } from "@/mission/types";
+import { etaRemainingLabel, fuelRemainingKg, legAtProgress, originDisplayLabel } from "@/mission/path";
+import type { MissionOrigin, MissionResult } from "@/mission/types";
 
 interface RouteHUDProps {
+  origin: MissionOrigin;
   destination: string;
   result: MissionResult;
   progress: number;
@@ -13,6 +14,7 @@ interface RouteHUDProps {
 }
 
 export const RouteHUD = ({
+  origin,
   destination,
   result,
   progress,
@@ -32,7 +34,9 @@ export const RouteHUD = ({
           <div className="flex items-center justify-between gap-2 border-b border-white/8 pb-2">
             <div>
               <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-beam/80">Navigation</p>
-              <p className="mt-0.5 text-sm font-semibold text-foreground">{destination}</p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground">
+                {originDisplayLabel(origin)} → {destination}
+              </p>
             </div>
             <span className="font-mono-num tnum rounded-full border border-beam/30 bg-beam/10 px-2.5 py-1 text-xs font-bold text-beam">
               {pct}%

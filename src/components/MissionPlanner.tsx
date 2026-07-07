@@ -11,6 +11,8 @@ import {
   type VesselConfig,
 } from "@/mission/types";
 import { useIsMobile } from "@/hooks/useMediaQuery";
+import { VESSEL_HULLS, defaultHullForMode } from "@/data/vesselPresets";
+import type { VesselHullId } from "@/data/vesselPresets";
 
 interface MissionPlannerProps {
   open: boolean;
@@ -48,7 +50,12 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
     setShowResults(false);
   };
 
-  const setMode = (mode: PropulsionMode) => onChange({ ...mission, mode });
+  const setMode = (mode: PropulsionMode) =>
+    onChange({
+      ...mission,
+      mode,
+      vessel: { ...mission.vessel, hullId: defaultHullForMode(mode) },
+    });
 
   const patchVessel = (patch: Partial<VesselConfig>) =>
     onChange({ ...mission, vessel: { ...mission.vessel, ...patch } });
@@ -184,6 +191,20 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
                 className="w-full rounded-lg border border-white/10 bg-background/60 px-3 py-2 font-mono-num tnum text-sm text-foreground outline-none focus:border-beam/40"
               />
               <span className="mt-1 block text-[10px] text-muted-foreground">Dry mass (kg)</span>
+            </Field>
+
+            <Field label="Hull">
+              <select
+                value={mission.vessel.hullId}
+                onChange={(e) => patchVessel({ hullId: e.target.value as VesselHullId })}
+                className="w-full rounded-lg border border-white/10 bg-background/60 px-3 py-2 text-sm text-foreground outline-none [color-scheme:dark] focus:border-beam/40"
+              >
+                {VESSEL_HULLS.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.label} — {h.inspiredBy}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             {/* Mode-specific inputs */}

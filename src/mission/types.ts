@@ -1,3 +1,5 @@
+import type { VesselHullId } from "@/data/vesselPresets";
+
 export type MissionOrigin = "sun" | "earth";
 
 export type PropulsionMode =
@@ -18,6 +20,8 @@ export interface VesselConfig {
   sublightFraction: number;
   /** Speculative warp factor for Alcubierre mode. */
   warpFactor: number;
+  /** Visual hull preset for the mission craft. */
+  hullId: VesselHullId;
 }
 
 export const DEFAULT_VESSEL: VesselConfig = {
@@ -28,6 +32,7 @@ export const DEFAULT_VESSEL: VesselConfig = {
   sailAreaM2: 10_000,
   sublightFraction: 0.1,
   warpFactor: 2,
+  hullId: "voyager-probe",
 };
 
 export interface MissionState {

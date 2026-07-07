@@ -22,6 +22,15 @@ function planetScenePos(name: string, years: number): Vec3 {
   return toScenePosition(heliocentricAU(p, years));
 }
 
+export function originDisplayLabel(origin: MissionOrigin): string {
+  return origin === "earth" ? "Earth" : "Sun";
+}
+
+/** Heliocentric scene position for mission departure. */
+export function originScenePos(origin: MissionOrigin, simYears: number): Vec3 {
+  return origin === "earth" ? planetScenePos("Earth", simYears) : [0, 0, 0];
+}
+
 /** Destination star position with proper motion at mission epoch. */
 function destScenePos(dest: NavStar, simYears: number, tripYears = 0): Vec3 {
   return starScenePositionAtEpoch(dest.distanceLy, dest.unitDir, dest.name, simYears + tripYears);
@@ -62,7 +71,7 @@ function buildGravityAssistPath(
   const destPos = destScenePos(dest, simYears, result.etaYears);
 
   const start = origin === "earth" ? earth : sun;
-  const points: MissionPathPoint[] = [{ position: start, label: "Origin", tEnd: 0 }];
+  const points: MissionPathPoint[] = [{ position: start, label: originDisplayLabel(origin), tEnd: 0 }];
   let cursor = start;
   let cum = 0;
 
@@ -113,19 +122,18 @@ export function buildMissionPath(
     return buildGravityAssistPath(result, dest, simYears, origin);
   }
 
-  const originPos: Vec3 = [0, 0, 0];
+  const originPos = originScenePos(origin, simYears);
   const total = Math.max(result.etaYears, 1e-9);
+  const finalDest = destScenePos(dest, simYears, total);
 
-  const points: MissionPathPoint[] = [{ position: originPos, label: "Origin", tEnd: 0 }];
+  const points: MissionPathPoint[] = [{ position: originPos, label: originDisplayLabel(origin), tEnd: 0 }];
   let cum = 0;
 
   for (const leg of result.legs) {
     cum = Math.min(1, cum + (leg.durationYears ?? 0) / total);
-    const legDest = destScenePos(dest, simYears, cum * total);
-    points.push({ position: lerp3(originPos, legDest, cum), label: leg.label, tEnd: cum });
+    points.push({ position: lerp3(originPos, finalDest, cum), label: leg.label, tEnd: cum });
   }
 
-  const finalDest = destScenePos(dest, simYears, total);
   if (points[points.length - 1].tEnd < 1) {
     points.push({ position: finalDest, label: dest.name, tEnd: 1 });
   }

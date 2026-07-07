@@ -72,9 +72,11 @@ import { stellarFrameDistance } from "@/stellar/render";
 import { isNavStar } from "@/mission/stars";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useSceneQuality, type SceneQuality } from "@/hooks/useSceneQuality";
+import { PULSAR_PERIOD_SEC, QUASAR_DISK_PERIOD_DAYS, rotationPeriodDays } from "@/data/stellarRotation";
+import { pulsarSpinRateRadPerSec, spinRateRadPerSec } from "@/lib/stellarRotation";
 import { MissionRoute } from "@/components/MissionRoute";
 import { MissionFlight } from "@/components/MissionFlight";
-import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/types";
+import { DEFAULT_VESSEL, type MissionOrigin, type MissionResult, type PropulsionMode, type VesselConfig } from "@/mission/types";
 
 interface SimClock {
   years: number;
@@ -206,6 +208,7 @@ const StarSurface = ({
   color,
   size,
   segments = 40,
+  spinRate = 0,
   onClick,
   onPointerOver,
   onPointerOut,
@@ -213,23 +216,29 @@ const StarSurface = ({
   color: string;
   size: number;
   segments?: number;
+  /** Radians per second — physical rotation of the photosphere. */
+  spinRate?: number;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   onPointerOver?: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut?: () => void;
 }) => {
   const matRef = useRef<THREE.ShaderMaterial>(null);
+  const spinRef = useRef<THREE.Group>(null);
   const uniforms = useMemo(
     () => ({ uTime: { value: 0 }, uColor: { value: new THREE.Color(color) } }),
     [color]
   );
   useFrame((_, dt) => {
     if (matRef.current) matRef.current.uniforms.uTime.value += dt;
+    if (spinRef.current && spinRate > 0) spinRef.current.rotation.y += dt * spinRate;
   });
   return (
-    <mesh onClick={onClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
-      <sphereGeometry args={[size, segments, segments]} />
-      <shaderMaterial ref={matRef} vertexShader={STAR_VERT} fragmentShader={STAR_FRAG} uniforms={uniforms} toneMapped={false} />
-    </mesh>
+    <group ref={spinRef}>
+      <mesh onClick={onClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+        <sphereGeometry args={[size, segments, segments]} />
+        <shaderMaterial ref={matRef} vertexShader={STAR_VERT} fragmentShader={STAR_FRAG} uniforms={uniforms} toneMapped={false} />
+      </mesh>
+    </group>
   );
 };
 
@@ -294,14 +303,16 @@ const TimeKeeper = ({
 };
 
 /* --------------------------------- the Sun -------------------------------- */
-const Sun = ({ onFocus }: { onFocus: (name: string) => void }) => {
+const Sun = ({ onFocus, accuracyMode }: { onFocus: (name: string) => void; accuracyMode: AccuracyMode }) => {
   const r = scaleRadiusKm(696000);
+  const sunSpin = spinRateRadPerSec(rotationPeriodDays("Sun").days, accuracyMode);
   return (
     <group>
       <StarSurface
         color="#ffb43a"
         size={r}
         segments={64}
+        spinRate={sunSpin}
         onClick={(e) => { e.stopPropagation(); onFocus("Sun"); }}
         onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
         onPointerOut={() => { document.body.style.cursor = "auto"; }}
@@ -953,16 +964,33 @@ const EarthSatellites = ({
 };
 
 /* ----------------------------- exotic objects ----------------------------- */
-const ExoticBody = ({ obj, onFocus }: { obj: ExoticObject; onFocus: (name: string) => void }) => {
+const ExoticBody = ({
+  obj,
+  onFocus,
+  accuracyMode,
+}: {
+  obj: ExoticObject;
+  onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
+}) => {
   const beamRef = useRef<THREE.Group>(null);
+  const coreRef = useRef<THREE.Mesh>(null);
+  const diskRef = useRef<THREE.Mesh>(null);
   const p = useMemo(() => new THREE.Vector3(...obj.dir).normalize().multiplyScalar(scaleDistanceAU(obj.sceneDistance * AU_PER_LY)), []);
   const core = obj.kind === "quasar" ? 16 : obj.kind === "neutron" ? 4 : 6;
+  const pulsarRate = PULSAR_PERIOD_SEC[obj.name] ? pulsarSpinRateRadPerSec(PULSAR_PERIOD_SEC[obj.name]) : 0;
+  const quasarDiskRate = spinRateRadPerSec(QUASAR_DISK_PERIOD_DAYS, accuracyMode);
   useFrame((_, dt) => {
-    if (beamRef.current && obj.kind === "pulsar") beamRef.current.rotation.y += dt * 2.5;
+    if (obj.kind === "pulsar") {
+      if (beamRef.current && pulsarRate > 0) beamRef.current.rotation.y += dt * pulsarRate;
+      if (coreRef.current && pulsarRate > 0) coreRef.current.rotation.y += dt * pulsarRate;
+    }
+    if (obj.kind === "quasar" && diskRef.current) diskRef.current.rotation.z += dt * quasarDiskRate;
   });
   return (
     <group position={p.toArray()}>
       <mesh
+        ref={coreRef}
         onClick={(e) => { e.stopPropagation(); onFocus(obj.name); }}
         onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
         onPointerOut={() => { document.body.style.cursor = "auto"; }}
@@ -994,7 +1022,7 @@ const ExoticBody = ({ obj, onFocus }: { obj: ExoticObject; onFocus: (name: strin
               <meshBasicMaterial color="#9fd0ff" transparent opacity={0.15} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
             </mesh>
           ))}
-          <mesh rotation={[Math.PI / 2.4, 0, 0]}>
+          <mesh ref={diskRef} rotation={[Math.PI / 2.4, 0, 0]}>
             <ringGeometry args={[core * 1.4, core * 3.6, 56]} />
             <meshBasicMaterial color="#ffce8f" transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
           </mesh>
@@ -1027,16 +1055,19 @@ const CatalogStars = ({
   scrubYears,
   lightYears,
   sceneQuality,
+  accuracyMode,
 }: {
   onFocus: (name: string) => void;
   clock: React.MutableRefObject<SimClock>;
   scrubYears: number | null;
   lightYears: number;
   sceneQuality: SceneQuality;
+  accuracyMode: AccuracyMode;
 }) => {
   const { camera } = useThree();
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const hoverGroupRef = useRef<THREE.Group>(null);
+  const spinAngles = useRef<number[]>([]);
   const list = useMemo(() => {
     const featured = new Set(NEARBY_STARS.map((s) => s.name.toLowerCase()));
     return STAR_CATALOG.filter((s) => {
@@ -1046,6 +1077,14 @@ const CatalogStars = ({
     });
   }, [sceneQuality.catalogMagLimit]);
   const sizes = useMemo(() => list.map((s) => catalogStarRender(s).size), [list]);
+  const spinRates = useMemo(
+    () =>
+      list.map((s) => {
+        const { days } = rotationPeriodDays(s.name, s.spect);
+        return spinRateRadPerSec(days, accuracyMode);
+      }),
+    [list, accuracyMode],
+  );
   const [hover, setHover] = useState(-1);
 
   useLayoutEffect(() => {
@@ -1056,16 +1095,23 @@ const CatalogStars = ({
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [list]);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const epoch = clock.current.orbitalYears;
     const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    if (spinAngles.current.length !== list.length) spinAngles.current = list.map(() => 0);
     list.forEach((s, i) => {
+      spinAngles.current[i] += dt * spinRates[i];
       const [px, py, pz] = starScenePositionAtEpoch(s.ly, s.pos, s.name, epoch);
       const display = catalogDisplayScale(sizes[i], s.mag, camera.position, [px, py, pz]);
-      m.makeScale(display, display, display);
-      m.setPosition(px, py, pz);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), spinAngles.current[i]);
+      scale.set(display, display, display);
+      pos.set(px, py, pz);
+      m.compose(pos, q, scale);
       mesh.setMatrixAt(i, m);
     });
     mesh.instanceMatrix.needsUpdate = true;
@@ -1112,6 +1158,7 @@ const NearbyStars = ({
   focusName,
   destinationName,
   trueMoonPeriods,
+  accuracyMode,
 }: {
   lightYears: number;
   scrubYears: number | null;
@@ -1121,27 +1168,31 @@ const NearbyStars = ({
   focusName: string | null;
   destinationName: string | null;
   trueMoonPeriods: boolean;
+  accuracyMode: AccuracyMode;
 }) => {
   const placed = useMemo(
     () =>
       NEARBY_STARS.map((s) => {
         const render = featuredStarRender(s);
-        return { star: s, size: render.size, glow: render.glow };
+        const { days } = rotationPeriodDays(s.name, s.spectral);
+        const spin = spinRateRadPerSec(days, accuracyMode);
+        return { star: s, size: render.size, glow: render.glow, spin };
       }),
-    []
+    [accuracyMode]
   );
   const groupRefs = useRef<(THREE.Group | null)[]>([]);
   const { camera } = useThree();
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const epoch = clock.current.orbitalYears;
-    placed.forEach(({ star, size }, i) => {
+    placed.forEach(({ star, size, spin }, i) => {
       const g = groupRefs.current[i];
       if (!g) return;
       const [px, py, pz] = starScenePositionAtEpoch(star.distance, star.dir, star.name, epoch);
       g.position.set(px, py, pz);
       const display = featuredDisplayScale(size, star.radiusSolar, camera.position, [px, py, pz]);
       g.scale.setScalar(display / size);
+      if (spin > 0) g.rotation.y += dt * spin;
     });
   });
 
@@ -1157,6 +1208,7 @@ const NearbyStars = ({
               color={star.color}
               size={size}
               segments={36}
+              spinRate={0}
               onClick={(e) => { e.stopPropagation(); onFocus(star.name); }}
               onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
               onPointerOut={() => { document.body.style.cursor = "auto"; }}
@@ -1565,6 +1617,8 @@ const Scene = ({
   missionFlying,
   missionMode,
   missionOrigin,
+  missionVessel,
+  accuracyMode,
   isMobile,
   sceneQuality,
   missionHudActive,
@@ -1593,6 +1647,8 @@ const Scene = ({
   missionFlying: boolean;
   missionMode: PropulsionMode;
   missionOrigin: MissionOrigin;
+  missionVessel: VesselConfig;
+  accuracyMode: AccuracyMode;
 }) => (
   <>
     <ambientLight intensity={0.25} />
@@ -1602,7 +1658,7 @@ const Scene = ({
     <TimeKeeper clock={clock} onZoom={setShowMinor} birthDate={birthDate} lifeYears={lightYears} scrubYears={scrubYears} />
 
     <EclipticGrid />
-    <Sun onFocus={onFocus} />
+    <Sun onFocus={onFocus} accuracyMode={accuracyMode} />
 
     {PLANETS.map((p) => (
       <Planet key={p.name} body={p} clock={clock} showMinor={showMinor} onFocus={onFocus} />
@@ -1632,7 +1688,7 @@ const Scene = ({
     ))}
     <EarthSatellites clock={clock} show={showMinor} trueLeoPeriods={trueMoonPeriods} onFocus={onFocus} />
     {EXOTIC_OBJECTS.map((o) => (
-      <ExoticBody key={o.name} obj={o} onFocus={onFocus} />
+      <ExoticBody key={o.name} obj={o} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
     {COSMIC_LANDMARKS.map((l) => (
       <CosmicLandmarkBody key={l.name} landmark={l} onFocus={onFocus} />
@@ -1650,15 +1706,29 @@ const Scene = ({
         missionResult={missionResult}
         mode={missionMode}
         missionOrigin={missionOrigin}
+        vessel={missionVessel}
         tripProgress={tripProgress}
         missionFlying={missionFlying}
         simYears={clock.current.orbitalYears}
         controlsRef={controlsRef}
       />
     ) : (
-      <MissionRoute destination={destination} />
+      <MissionRoute
+        destination={destination}
+        missionResult={missionResult}
+        missionOrigin={missionOrigin}
+        missionMode={missionMode}
+        simYears={clock.current.orbitalYears}
+      />
     )}
-    <CatalogStars onFocus={onFocus} clock={clock} scrubYears={scrubYears} lightYears={lightYears} sceneQuality={sceneQuality} />
+    <CatalogStars
+      onFocus={onFocus}
+      clock={clock}
+      scrubYears={scrubYears}
+      lightYears={lightYears}
+      sceneQuality={sceneQuality}
+      accuracyMode={accuracyMode}
+    />
     <NearbyStars
       lightYears={displayLY}
       scrubYears={scrubYears}
@@ -1668,6 +1738,7 @@ const Scene = ({
       focusName={focusName}
       destinationName={destination}
       trueMoonPeriods={trueMoonPeriods}
+      accuracyMode={accuracyMode}
     />
 
     {BLACK_HOLES.map((bh) => (
@@ -1718,6 +1789,7 @@ interface SolarSystemProps {
   missionFlying?: boolean;
   missionMode?: PropulsionMode;
   missionOrigin?: MissionOrigin;
+  missionVessel?: VesselConfig;
 }
 
 /* ------------------------------- the wrapper ------------------------------ */
@@ -1738,6 +1810,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       missionFlying = false,
       missionMode = "sublight",
       missionOrigin = "sun",
+      missionVessel = DEFAULT_VESSEL,
     },
     ref,
   ) => {
@@ -1908,6 +1981,8 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             missionFlying={missionFlying}
             missionMode={missionMode}
             missionOrigin={missionOrigin}
+            missionVessel={missionVessel}
+            accuracyMode={accuracyMode}
             isMobile={isMobile}
             sceneQuality={sceneQuality}
             missionHudActive={missionHudActive}

@@ -47,6 +47,16 @@ describe("mission path", () => {
     expect(nearPlanet).toBe(true);
   });
 
+  it("starts earth-origin straight routes at Earth, not the Sun", () => {
+    const star = findNavStar("Proxima Centauri")!;
+    const result = computeMission(star, "nuclear", DEFAULT_VESSEL, "earth")!;
+    const path = buildMissionPath(result, star, "nuclear", 0, "earth");
+    const start = interpolatePath(path, 0);
+    const earth = toScenePosition(heliocentricAU(PLANETS.find((p) => p.name === "Earth")!, 0));
+    expect(Math.hypot(start[0] - earth[0], start[1] - earth[1], start[2] - earth[2])).toBeLessThan(0.01);
+    expect(path[0].label).toBe("Earth");
+  });
+
   it("resolves current leg from progress", () => {
     const star = findNavStar("Proxima Centauri")!;
     const result = computeMission(star, "nuclear", DEFAULT_VESSEL, "sun")!;
