@@ -5,10 +5,18 @@ hubble.glb — NASA-3D-Resources, Hubble Space Telescope (A)
 jwst.glb — NASA-3D-Resources, James Webb Space Telescope (A)
 iss.glb — NASA-3D-Resources, International Space Station (ISS) (A)
 voyager.glb — NASA-3D-Resources, Voyager Probe (A)
-saturn.glb — NASA Science, Saturn 3D Model (science.nasa.gov/resource/saturn-3d-model/)
-earth.glb — NASA Science, Earth 3D Model (science.nasa.gov/resource/earth-3d-model/)
-moon.glb — NASA Science, Moon 3D Model (science.nasa.gov/resource/moon-3d-model/)
-mars.glb — NASA Science, Planet Mars 3D Model (science.nasa.gov/resource/planet-mars-3d-model/)
-jupiter.glb — NASA Science, Jupiter 3D Model (science.nasa.gov/resource/jupiter-3d-model/)
+saturn.glb — NASA Science, Saturn 3D Model
+earth.glb — NASA Science, Earth 3D Model
+moon.glb — NASA Science, Moon 3D Model
+mars.glb — NASA Science, Planet Mars 3D Model
+jupiter.glb — NASA Science, Jupiter 3D Model
+io.glb — NASA Science, Io 3D Model
+europa.glb — NASA Science, Europa 3D Model
+ganymede.glb — NASA Science, Ganymede 3D Model
+callisto.glb — NASA Science, Callisto 3D Model
+titan.glb — NASA Science, Titan 3D Model
+enceladus.glb — NASA Science, Enceladus 3D Model
+new-horizons.glb — NASA Science, New Horizons 3D Model
+parker.glb — NASA Science, Parker Solar Probe 3D Model
 
 Source repository: https://github.com/nasa/NASA-3D-Resources

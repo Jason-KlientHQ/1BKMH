@@ -1,12 +1,35 @@
 import { Component, Suspense, useMemo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { NASA_GLTF } from "@/data/nasaModels";
+import { NASA_GLTF, NASA_MOON_GLTF } from "@/data/nasaModels";
 import { VESSEL_GLTF } from "@/data/vesselModels";
 
-/** Preload NASA assets once the bundle loads (inside Canvas context). */
+/** Boot-time NASA assets (planets + in-view spacecraft) — moons load lazily. */
+const NASA_BOOT_GLTF = [
+  NASA_GLTF.hubble,
+  NASA_GLTF.jwst,
+  NASA_GLTF.iss,
+  NASA_GLTF.voyager,
+  NASA_GLTF.saturn,
+  NASA_GLTF.earth,
+  NASA_GLTF.mars,
+  NASA_GLTF.jupiter,
+  NASA_GLTF.newHorizons,
+  NASA_GLTF.parker,
+] as const;
+
+/** Preload core NASA assets once the bundle loads (inside Canvas context). */
 export function preloadNasaModels() {
-  Object.values(NASA_GLTF).forEach((url) => useGLTF.preload(url));
+  NASA_BOOT_GLTF.forEach((url) => useGLTF.preload(url));
+}
+
+let moonPreloadStarted = false;
+
+/** Lazy-load heavy moon meshes when the user zooms in for moons. */
+export function preloadNasaMoonModels() {
+  if (moonPreloadStarted) return;
+  moonPreloadStarted = true;
+  NASA_MOON_GLTF.forEach((url) => useGLTF.preload(url));
 }
 
 /** Preload mission hull glTF assets (Kenney + NASA Voyager). */

@@ -19,6 +19,7 @@ import { findNavStar } from "@/mission/stars";
 import { buildAppShareQuery, parseAppUrl } from "@/mission/url";
 import { DEFAULT_VESSEL, type MissionState } from "@/mission/types";
 import type { AccuracyMode } from "@/lib/accuracyMode";
+import { EXOPLANET_CATALOG } from "@/data/exoplanetCatalog";
 
 const VISUAL_TRIP_MS = 36_000;
 
@@ -600,13 +601,18 @@ const Stats = ({ result, liveLy }: { result: LightJourneyResult; liveLy: number 
       value: result.totalOrbits.toLocaleString("en-US", { maximumFractionDigits: 0 }),
       unit: "your light, around Earth's orbit",
     },
+    {
+      label: "Known worlds",
+      value: EXOPLANET_CATALOG.galaxyTotal.toLocaleString("en-US"),
+      unit: `confirmed exoplanets galaxy-wide (NASA archive, ${EXOPLANET_CATALOG.fetchedAt})`,
+    },
   ];
 
   return (
     <div ref={ref} className={className}>
       <div className="glass-shell">
         <div className="glass-core p-6 sm:p-10">
-          <div className="grid gap-8 sm:grid-cols-3 sm:gap-6">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 sm:gap-6">
             {stats.map((s, i) => (
               <div
                 key={s.label}

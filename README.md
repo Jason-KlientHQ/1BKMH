@@ -18,7 +18,8 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### 3D solar system
 - Planets, moons, dwarf planets, comets, spacecraft (NASA glTF models + procedural fallbacks)
-- **NASA planet meshes** — Earth, Moon, Mars, Jupiter, Saturn (vendored under `public/models/nasa/`)
+- **NASA planet & moon meshes** — Earth, Mars, Jupiter, Saturn, Moon, Io, Europa, Ganymede, Callisto, Titan, Enceladus (`public/models/nasa/`)
+- **Accretion disks** — shader-based disks for black holes, Sgr A*, and quasars (not generic glow spheres)
 - **Proportional moon scaling** — educational mode uses physical parent/moon radius ratios; cinematic adds a small readability boost
 - Asteroid & Kuiper belts, heliosphere, schematic Local Bubble, Oort cloud
 - Real **J2000 Keplerian** orbits with correct relative speeds
@@ -28,7 +29,7 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### Stars & cosmos
 - **~47 featured** bright/nearby stars (shader glow, curated stories) plus **~350** HYG catalog stars
-- **Exoplanet systems** — 31 curated worlds with stories + instanced archive planets from the [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/) when zoomed in; star panels show confirmed counts
+- **Exoplanet systems** — 31 curated worlds with stories + instanced archive planets from the [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/) when zoomed in; star panels show confirmed counts; stats strip shows galaxy-wide total
 - Famous giants: Betelgeuse, Antares, Rigel, Deneb, Orion's Belt, Canopus, Polaris, and more
 - **Zoom-aware sizing** — distant stars stay readable on the map; catalog stars have magnitude-based floors
 - **Proper motion** — star positions drift with simulation time and life-timeline scrub

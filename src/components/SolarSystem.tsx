@@ -76,7 +76,8 @@ import {
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePositionAtEpoch } from "@/astrometry/properMotion";
-import { GltfWithFallback, preloadNasaModels, preloadVesselModels } from "@/components/GltfModel";
+import { AccretionDisk, blackHoleDiskRadii, GalaxySilhouette, supermassiveDiskRadii } from "@/components/AccretionDisk";
+import { GltfWithFallback, preloadNasaModels, preloadNasaMoonModels, preloadVesselModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { MOON_MODEL_ROTATION, MOON_MODEL_URL, NASA_GLTF, PLANET_MODEL_ROTATION, PLANET_MODEL_URL } from "@/data/nasaModels";
 import { moonMeshSceneRadius, moonOrbitSceneRadius } from "@/lib/moonScale";
@@ -357,6 +358,14 @@ const SATURN_RING_TILT = (26.73 * Math.PI) / 180;
 
 preloadNasaModels();
 preloadVesselModels();
+
+/** Begin loading moon glTF assets once the user zooms in for moons. */
+const MoonModelPreloader = ({ active }: { active: boolean }) => {
+  useEffect(() => {
+    if (active) preloadNasaMoonModels();
+  }, [active]);
+  return null;
+};
 
 const SaturnProcedural = ({
   r,
@@ -869,38 +878,31 @@ const BlackHoleBody = ({
 }) => {
   const p = useMemo(
     () => new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY)),
-    []
+    [bh.dir, bh.distance],
   );
-  const bhR = 18;
-  const accR = 62;
+  const disk = useMemo(() => blackHoleDiskRadii(bh.massSolar), [bh.massSolar]);
+  const pickHandlers = {
+    onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onFocus(bh.name); },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); document.body.style.cursor = "pointer"; },
+    onPointerOut: () => { document.body.style.cursor = "auto"; },
+  };
   return (
     <group position={p.toArray()}>
-      <mesh
-        onClick={(e) => { e.stopPropagation(); onFocus(bh.name); }}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-        onPointerOut={() => { document.body.style.cursor = "auto"; }}
-      >
-        <sphereGeometry args={[bhR, 32, 32]} />
-        <meshBasicMaterial color="#000000" />
+      <AccretionDisk
+        innerRadius={disk.inner}
+        outerRadius={disk.outer}
+        shadowRadius={disk.shadow}
+        accuracyMode={accuracyMode}
+        hotColor="#ffd080"
+        coolColor="#ff6020"
+        opacity={accuracyMode === "educational" ? 0.62 : 0.78}
+        tilt={[Math.PI / 2.4, 0.55, 0.15]}
+      />
+      <mesh {...pickHandlers} visible={false}>
+        <sphereGeometry args={[disk.outer * 1.05, 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} />
       </mesh>
-      <mesh rotation={[Math.PI / 2.5, 0.5, 0]}>
-        <ringGeometry args={[bhR * 1.25, accR, 80]} />
-        <meshBasicMaterial
-          color="#ffb24a"
-          transparent
-          opacity={accuracyMode === "educational" ? 0.52 : decorativeOpacity(0.7, accuracyMode)}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      {showDecorativeGlow(accuracyMode) && (
-        <mesh>
-          <sphereGeometry args={[accR * 1.1, 20, 20]} />
-          <meshBasicMaterial color="#ff9b4a" transparent opacity={decorativeOpacity(0.16, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
-        </mesh>
-      )}
-      <Html position={[0, accR + 22, 0]} center distanceFactor={260} className="ss-label">
+      <Html position={[0, disk.outer + 22, 0]} center distanceFactor={260} className="ss-label">
         <button onClick={() => onFocus(bh.name)} className="ss-name" style={{ color: "#ffbe8f", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
           {bh.name}
         </button>
@@ -1082,8 +1084,7 @@ const ExoticBody = ({
 }) => {
   const beamRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
-  const diskRef = useRef<THREE.Mesh>(null);
-  const p = useMemo(() => new THREE.Vector3(...obj.dir).normalize().multiplyScalar(scaleDistanceAU(obj.sceneDistance * AU_PER_LY)), []);
+  const p = useMemo(() => new THREE.Vector3(...obj.dir).normalize().multiplyScalar(scaleDistanceAU(obj.sceneDistance * AU_PER_LY)), [obj.dir, obj.sceneDistance]);
   const core = obj.kind === "quasar" ? 16 : obj.kind === "neutron" ? 4 : 6;
   const pulsarRate = PULSAR_PERIOD_SEC[obj.name] ? pulsarSpinRateRadPerSec(PULSAR_PERIOD_SEC[obj.name]) : 0;
   const quasarDiskRate = spinRateRadPerSec(QUASAR_DISK_PERIOD_DAYS, accuracyMode);
@@ -1092,7 +1093,7 @@ const ExoticBody = ({
       if (beamRef.current && pulsarRate > 0) beamRef.current.rotation.y += dt * pulsarRate;
       if (coreRef.current && pulsarRate > 0) coreRef.current.rotation.y += dt * pulsarRate;
     }
-    if (obj.kind === "quasar" && diskRef.current) diskRef.current.rotation.z += dt * quasarDiskRate;
+
   });
   return (
     <group position={p.toArray()}>
@@ -1131,10 +1132,19 @@ const ExoticBody = ({
               <meshBasicMaterial color="#9fd0ff" transparent opacity={decorativeOpacity(0.15, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
             </mesh>
           ))}
-          <mesh ref={diskRef} rotation={[Math.PI / 2.4, 0, 0]}>
-            <ringGeometry args={[core * 1.4, core * 3.6, 56]} />
-            <meshBasicMaterial color="#ffce8f" transparent opacity={decorativeOpacity(0.4, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-          </mesh>
+          <group>
+            <AccretionDisk
+              innerRadius={core * 1.2}
+              outerRadius={core * 4.2}
+              shadowRadius={core * 0.65}
+              hotColor="#fff0c8"
+              coolColor="#6eb5ff"
+              opacity={0.85}
+              accuracyMode={accuracyMode}
+              tilt={[0, 0, 0]}
+              spinRate={quasarDiskRate * 2}
+            />
+          </group>
         </group>
       )}
 
@@ -1678,34 +1688,46 @@ const CosmicLandmarkBody = ({
     [landmark]
   );
   const core = landmark.kind === "galactic_center" ? 22 : landmark.kind === "galaxy" ? 28 : 18;
+  const smDisk = useMemo(() => supermassiveDiskRadii(core), [core]);
+  const pickHandlers = {
+    onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onFocus(landmark.name); },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); document.body.style.cursor = "pointer"; },
+    onPointerOut: () => { document.body.style.cursor = "auto"; },
+  };
   return (
     <group position={p.toArray()}>
-      <mesh
-        onClick={(e) => { e.stopPropagation(); onFocus(landmark.name); }}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-        onPointerOut={() => { document.body.style.cursor = "auto"; }}
-      >
-        <sphereGeometry args={[core, 32, 32]} />
-        <meshBasicMaterial color={landmark.color} toneMapped={false} />
+      {landmark.kind === "galactic_center" ? (
+        <AccretionDisk
+          innerRadius={smDisk.inner}
+          outerRadius={smDisk.outer}
+          shadowRadius={smDisk.shadow}
+          hotColor="#ffe8b0"
+          coolColor="#ff8040"
+          opacity={0.8}
+          accuracyMode={accuracyMode}
+          tilt={[Math.PI / 2.15, 0.35, 0.45]}
+          spinRate={0.08}
+        />
+      ) : landmark.kind === "galaxy" ? (
+        <GalaxySilhouette core={core} color={landmark.color} accuracyMode={accuracyMode} />
+      ) : (
+        <>
+          <mesh>
+            <sphereGeometry args={[core, 32, 32]} />
+            <meshBasicMaterial color={landmark.color} toneMapped={false} />
+          </mesh>
+          {showDecorativeGlow(accuracyMode) && (
+            <mesh>
+              <sphereGeometry args={[core * 2.3, 24, 24]} />
+              <meshBasicMaterial color={landmark.color} transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          )}
+        </>
+      )}
+      <mesh {...pickHandlers} visible={false}>
+        <sphereGeometry args={[core * (landmark.kind === "galaxy" ? 5 : 4), 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} />
       </mesh>
-      {showDecorativeGlow(accuracyMode) && (
-        <mesh>
-          <sphereGeometry args={[core * 2.3, 24, 24]} />
-          <meshBasicMaterial color={landmark.color} transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
-        </mesh>
-      )}
-      {landmark.kind === "galaxy" && showDecorativeGlow(accuracyMode) && (
-        <mesh rotation={[Math.PI / 2.8, 0.4, 0.15]}>
-          <ringGeometry args={[core * 1.6, core * 5.5, 64]} />
-          <meshBasicMaterial color={landmark.color} transparent opacity={decorativeOpacity(0.22, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-        </mesh>
-      )}
-      {landmark.kind === "galactic_center" && showDecorativeGlow(accuracyMode) && (
-        <mesh rotation={[Math.PI / 2.2, 0, 0.5]}>
-          <ringGeometry args={[core * 1.2, core * 4.2, 56]} />
-          <meshBasicMaterial color="#ffae5a" transparent opacity={decorativeOpacity(0.35, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-        </mesh>
-      )}
       <Html position={[0, core * 3.5, 0]} center distanceFactor={360} className="ss-label">
         <button
           onClick={() => onFocus(landmark.name)}
@@ -1792,6 +1814,7 @@ const Scene = ({
     <Stars radius={9000} depth={200} count={sceneQuality.backgroundStarCounts[1]} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
     <TimeKeeper clock={clock} onZoom={setShowMinor} birthDate={birthDate} lifeYears={lightYears} scrubYears={scrubYears} />
 
+    <MoonModelPreloader active={showMinor} />
     <EclipticGrid />
     <Sun onFocus={onFocus} accuracyMode={accuracyMode} />
 
