@@ -77,7 +77,15 @@ import {
 import { STAR_CATALOG } from "@/data/starCatalog";
 import { starScenePositionAtEpoch } from "@/astrometry/properMotion";
 import { AccretionDisk, blackHoleDiskRadii, GalaxySilhouette, supermassiveDiskRadii } from "@/components/AccretionDisk";
-import { GltfWithFallback, preloadNasaModels, preloadNasaMoonModels, preloadVesselModels } from "@/components/GltfModel";
+import {
+  GltfWithFallback,
+  preloadNasaDwarfModels,
+  preloadNasaModels,
+  preloadNasaMoonModels,
+  preloadRoadsterModel,
+  preloadVesselModels,
+} from "@/components/GltfModel";
+import { ROADSTER_GLTF } from "@/data/roadsterModels";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { MOON_MODEL_ROTATION, MOON_MODEL_URL, NASA_GLTF, PLANET_MODEL_ROTATION, PLANET_MODEL_URL } from "@/data/nasaModels";
 import { moonMeshSceneRadius, moonOrbitSceneRadius } from "@/lib/moonScale";
@@ -359,10 +367,13 @@ const SATURN_RING_TILT = (26.73 * Math.PI) / 180;
 preloadNasaModels();
 preloadVesselModels();
 
-/** Begin loading moon glTF assets once the user zooms in for moons. */
+/** Begin loading moon + dwarf glTF assets once the user zooms in for minor bodies. */
 const MoonModelPreloader = ({ active }: { active: boolean }) => {
   useEffect(() => {
-    if (active) preloadNasaMoonModels();
+    if (active) {
+      preloadNasaMoonModels();
+      preloadNasaDwarfModels();
+    }
   }, [active]);
   return null;
 };
@@ -762,6 +773,53 @@ const CometBody = ({
 };
 
 /* ---------------------------- Starman's Roadster -------------------------- */
+const ROADSTER_RED = "#c81e1e";
+
+const StarmanFigure = () => (
+  <group position={[-0.05, 0.42, -0.12]} scale={0.85}>
+    <mesh position={[0, 0.2, 0]}>
+      <sphereGeometry args={[0.12, 18, 18]} />
+      <meshStandardMaterial color="#f2f2f2" roughness={0.5} />
+    </mesh>
+    <mesh>
+      <boxGeometry args={[0.2, 0.28, 0.2]} />
+      <meshStandardMaterial color="#eaeaea" roughness={0.6} />
+    </mesh>
+    <mesh position={[0.02, -0.02, 0.22]} rotation={[0, 0, -0.3]}>
+      <boxGeometry args={[0.08, 0.24, 0.08]} />
+      <meshStandardMaterial color="#eaeaea" roughness={0.6} />
+    </mesh>
+  </group>
+);
+
+const ProceduralRoadster = () => {
+  const wheels: [number, number][] = [[0.72, 0.5], [0.72, -0.5], [-0.72, 0.5], [-0.72, -0.5]];
+  return (
+    <group scale={0.9}>
+      <mesh position={[0, 0.02, 0]}>
+        <boxGeometry args={[2.4, 0.32, 1.0]} />
+        <meshStandardMaterial color={ROADSTER_RED} metalness={0.6} roughness={0.32} />
+      </mesh>
+      <mesh position={[1.05, -0.02, 0]}>
+        <boxGeometry args={[0.7, 0.2, 0.86]} />
+        <meshStandardMaterial color={ROADSTER_RED} metalness={0.6} roughness={0.32} />
+      </mesh>
+      <mesh position={[-0.95, 0.06, 0]}>
+        <boxGeometry args={[0.7, 0.26, 0.94]} />
+        <meshStandardMaterial color={ROADSTER_RED} metalness={0.6} roughness={0.32} />
+      </mesh>
+      {wheels.map(([wx, wz], i) => (
+        <group key={i} position={[wx, -0.16, wz]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.27, 0.27, 0.16, 22]} />
+            <meshStandardMaterial color="#141414" roughness={0.6} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
 const RoadsterBody = ({
   clock,
   onFocus,
@@ -772,89 +830,48 @@ const RoadsterBody = ({
   const ref = useRef<THREE.Group>(null);
   const carRef = useRef<THREE.Group>(null);
   const path = useMemo(() => orbitPath(ROADSTER), []);
-  const RED = "#c81e1e";
-  const wheels: [number, number][] = [[0.72, 0.5], [0.72, -0.5], [-0.72, 0.5], [-0.72, -0.5]];
+
+  useEffect(() => {
+    preloadRoadsterModel();
+  }, []);
 
   useFrame((_, dt) => {
     const au = heliocentricAU(ROADSTER, clock.current.orbitalYears);
     const [x, y, z] = toScenePosition(au);
     ref.current?.position.set(x, y, z);
     if (carRef.current) {
-      carRef.current.rotation.y += dt * 0.5; // tumbling in space
+      carRef.current.rotation.y += dt * 0.5;
       carRef.current.rotation.x += dt * 0.18;
     }
   });
+
+  const pickHandlers = {
+    onClick: (e: ThreeEvent<MouseEvent>) => {
+      e.stopPropagation();
+      onFocus(ROADSTER.name);
+    },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      document.body.style.cursor = "pointer";
+    },
+    onPointerOut: () => {
+      document.body.style.cursor = "auto";
+    },
+  };
 
   return (
     <group>
       <Line points={path} color="#ff5a5a" lineWidth={1} transparent opacity={0.35} dashed dashSize={1.2} gapSize={1} />
       <group ref={ref}>
-        <group
-          ref={carRef}
-          scale={0.9}
-          onClick={(e) => { e.stopPropagation(); onFocus(ROADSTER.name); }}
-          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
-          onPointerOut={() => { document.body.style.cursor = "auto"; }}
-        >
-          {/* main body */}
-          <mesh position={[0, 0.02, 0]}>
-            <boxGeometry args={[2.4, 0.32, 1.0]} />
-            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
-          </mesh>
-          {/* tapered nose */}
-          <mesh position={[1.05, -0.02, 0]}>
-            <boxGeometry args={[0.7, 0.2, 0.86]} />
-            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
-          </mesh>
-          {/* rear deck */}
-          <mesh position={[-0.95, 0.06, 0]}>
-            <boxGeometry args={[0.7, 0.26, 0.94]} />
-            <meshStandardMaterial color={RED} metalness={0.6} roughness={0.32} />
-          </mesh>
-          {/* underbody */}
-          <mesh position={[0, -0.16, 0]}>
-            <boxGeometry args={[2.3, 0.16, 1.06]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.7} />
-          </mesh>
-          {/* open cockpit well */}
-          <mesh position={[-0.1, 0.16, 0]}>
-            <boxGeometry args={[0.9, 0.12, 0.72]} />
-            <meshStandardMaterial color="#2a2320" roughness={0.8} />
-          </mesh>
-          {/* windshield */}
-          <mesh position={[0.4, 0.3, 0]} rotation={[0, 0, 0.7]}>
-            <boxGeometry args={[0.04, 0.34, 0.82]} />
-            <meshStandardMaterial color="#bfe6ff" transparent opacity={0.4} metalness={0.2} roughness={0.1} />
-          </mesh>
-          {/* wheels */}
-          {wheels.map(([wx, wz], i) => (
-            <group key={i} position={[wx, -0.16, wz]}>
-              <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.27, 0.27, 0.16, 22]} />
-                <meshStandardMaterial color="#141414" roughness={0.6} />
-              </mesh>
-              <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.12, 0.12, 0.18, 16]} />
-                <meshStandardMaterial color="#8a8f96" metalness={0.8} roughness={0.3} />
-              </mesh>
-            </group>
-          ))}
-          {/* Starman in the driver's seat */}
-          <group position={[-0.1, 0.34, -0.18]}>
-            <mesh position={[0, 0.2, 0]}>
-              <sphereGeometry args={[0.12, 18, 18]} />
-              <meshStandardMaterial color="#f2f2f2" roughness={0.5} />
-            </mesh>
-            <mesh>
-              <boxGeometry args={[0.2, 0.28, 0.2]} />
-              <meshStandardMaterial color="#eaeaea" roughness={0.6} />
-            </mesh>
-            {/* arm resting on the door */}
-            <mesh position={[0.02, -0.02, 0.22]} rotation={[0, 0, -0.3]}>
-              <boxGeometry args={[0.08, 0.24, 0.08]} />
-              <meshStandardMaterial color="#eaeaea" roughness={0.6} />
-            </mesh>
-          </group>
+        <group ref={carRef} {...pickHandlers}>
+          <GltfWithFallback
+            url={ROADSTER_GLTF}
+            targetSize={2.2}
+            tint={ROADSTER_RED}
+            rotation={[0, Math.PI / 2, 0]}
+            fallback={<ProceduralRoadster />}
+          />
+          <StarmanFigure />
         </group>
         <Html position={[0, 1.15, 0]} center distanceFactor={40} className="ss-label">
           <button onClick={() => onFocus(ROADSTER.name)} className="ss-name" style={{ color: "#ff8a8a", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>

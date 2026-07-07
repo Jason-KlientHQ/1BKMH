@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "fetch-exoplanets": "node scripts/fetch-exoplanets.mjs"
+    "fetch-exoplanets": "node scripts/fetch-exoplanets.mjs",
+    "fetch-nasa-models": "node scripts/fetch-nasa-models.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

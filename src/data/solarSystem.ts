@@ -116,6 +116,10 @@ export const SPACECRAFT: Spacecraft[] = [
   { name: "Pioneer 10", kind: "Deep-space probe", orbit: "sun", distanceAU: 135, dir: [0.9, -0.1, -0.42], color: "#b8ad92", desc: "The first probe to cross the asteroid belt and fly by Jupiter; carrying a plaque for any who find it." },
   { name: "Voyager 2", kind: "Interstellar probe", orbit: "sun", distanceAU: 139, dir: [-0.2, -0.7, 0.68], color: "#cbb68f", desc: "The only spacecraft to visit all four giant planets; now in interstellar space, still calling home." },
   { name: "Voyager 1", kind: "Interstellar probe", orbit: "sun", distanceAU: 166, dir: [0.3, 0.85, 0.43], color: "#d8c39a", desc: "The most distant human-made object — beyond the heliosphere in interstellar space, carrying the Golden Record." },
+  { name: "Cassini", kind: "Saturn orbiter", orbit: "sun", distanceAU: 9.5, dir: [0.55, 0.2, 0.81], color: "#c5c0b0", desc: "NASA's Cassini spacecraft spent 13 years touring Saturn, its rings, and moons before a deliberate plunge into the planet in 2017." },
+  { name: "OSIRIS-REx", kind: "Sample-return probe", orbit: "sun", distanceAU: 1.1, dir: [-0.4, 0.15, 0.9], color: "#b8b0a0", desc: "The first U.S. mission to collect an asteroid sample — it delivered pieces of Bennu to Earth in 2023 and is now headed toward asteroid Apophis." },
+  { name: "Juno", kind: "Jupiter orbiter", orbit: "sun", distanceAU: 5.2, dir: [0.72, 0.1, 0.69], color: "#d4cbb8", desc: "In polar orbit around Jupiter since 2016, Juno peers beneath the giant planet's clouds to map its gravity, magnetic field, and auroras." },
+  { name: "Dawn", kind: "Asteroid orbiter", orbit: "sun", distanceAU: 2.8, dir: [-0.6, 0.35, 0.72], color: "#a8a090", desc: "The first spacecraft to orbit two extraterrestrial bodies — Vesta and dwarf planet Ceres — using ion propulsion." },
 ];
 
 /* ---------------------------- Exotic objects ------------------------------ */

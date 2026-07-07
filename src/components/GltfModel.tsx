@@ -1,7 +1,8 @@
 import { Component, Suspense, useMemo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { NASA_GLTF, NASA_MOON_GLTF } from "@/data/nasaModels";
+import { NASA_DWARF_GLTF, NASA_GLTF, NASA_MOON_GLTF } from "@/data/nasaModels";
+import { ROADSTER_GLTF } from "@/data/roadsterModels";
 import { VESSEL_GLTF } from "@/data/vesselModels";
 
 /** Boot-time NASA assets (planets + in-view spacecraft) — moons load lazily. */
@@ -10,12 +11,17 @@ const NASA_BOOT_GLTF = [
   NASA_GLTF.jwst,
   NASA_GLTF.iss,
   NASA_GLTF.voyager,
-  NASA_GLTF.saturn,
+  NASA_GLTF.mercury,
+  NASA_GLTF.venus,
   NASA_GLTF.earth,
   NASA_GLTF.mars,
   NASA_GLTF.jupiter,
+  NASA_GLTF.saturn,
+  NASA_GLTF.uranus,
+  NASA_GLTF.neptune,
   NASA_GLTF.newHorizons,
   NASA_GLTF.parker,
+  NASA_GLTF.pioneer,
 ] as const;
 
 /** Preload core NASA assets once the bundle loads (inside Canvas context). */
@@ -24,6 +30,8 @@ export function preloadNasaModels() {
 }
 
 let moonPreloadStarted = false;
+let dwarfPreloadStarted = false;
+let roadsterPreloadStarted = false;
 
 /** Lazy-load heavy moon meshes when the user zooms in for moons. */
 export function preloadNasaMoonModels() {
@@ -32,13 +40,27 @@ export function preloadNasaMoonModels() {
   NASA_MOON_GLTF.forEach((url) => useGLTF.preload(url));
 }
 
+/** Lazy-load dwarf-planet meshes when minor bodies become visible. */
+export function preloadNasaDwarfModels() {
+  if (dwarfPreloadStarted) return;
+  dwarfPreloadStarted = true;
+  NASA_DWARF_GLTF.forEach((url) => useGLTF.preload(url));
+}
+
+/** Lazy-load Starman's Roadster mesh. */
+export function preloadRoadsterModel() {
+  if (roadsterPreloadStarted) return;
+  roadsterPreloadStarted = true;
+  useGLTF.preload(ROADSTER_GLTF);
+}
+
 /** Preload mission hull glTF assets (Kenney + NASA Voyager). */
 export function preloadVesselModels() {
   Object.values(VESSEL_GLTF).forEach((url) => useGLTF.preload(url));
   useGLTF.preload(NASA_GLTF.voyager);
 }
 
-function normalizeObject(object: THREE.Object3D, targetSize: number): THREE.Object3D {
+function normalizeObject(object: THREE.Object3D, targetSize: number, tint?: string): THREE.Object3D {
   const clone = object.clone(true);
   const box = new THREE.Box3().setFromObject(clone);
   const size = box.getSize(new THREE.Vector3());
@@ -52,6 +74,19 @@ function normalizeObject(object: THREE.Object3D, targetSize: number): THREE.Obje
       const mesh = child as THREE.Mesh;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
+      if (tint && mesh.material) {
+        const src = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const tinted = src.map((m) => {
+          const c = m.clone();
+          if ("color" in c && c.color instanceof THREE.Color) {
+            c.color.set(tint);
+          }
+          if ("metalness" in c) (c as THREE.MeshStandardMaterial).metalness = 0.6;
+          if ("roughness" in c) (c as THREE.MeshStandardMaterial).roughness = 0.32;
+          return c;
+        });
+        mesh.material = Array.isArray(mesh.material) ? tinted : tinted[0]!;
+      }
     }
   });
   return clone;
@@ -61,13 +96,15 @@ function NormalizedGltf({
   url,
   targetSize,
   rotation,
+  tint,
 }: {
   url: string;
   targetSize: number;
   rotation?: [number, number, number];
+  tint?: string;
 }) {
   const { scene } = useGLTF(url);
-  const object = useMemo(() => normalizeObject(scene, targetSize), [scene, targetSize]);
+  const object = useMemo(() => normalizeObject(scene, targetSize, tint), [scene, targetSize, tint]);
 
   return (
     <group rotation={rotation}>
@@ -98,15 +135,17 @@ export const GltfWithFallback = ({
   targetSize,
   fallback,
   rotation,
+  tint,
 }: {
   url: string;
   targetSize: number;
   fallback: ReactNode;
   rotation?: [number, number, number];
+  tint?: string;
 }) => (
   <GltfErrorBoundary fallback={fallback}>
     <Suspense fallback={fallback}>
-      <NormalizedGltf url={url} targetSize={targetSize} rotation={rotation} />
+      <NormalizedGltf url={url} targetSize={targetSize} rotation={rotation} tint={tint} />
     </Suspense>
   </GltfErrorBoundary>
 );

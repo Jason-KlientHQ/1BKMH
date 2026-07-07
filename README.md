@@ -18,7 +18,8 @@ Light travels one light-year per year. If a beam left the moment you were born a
 
 ### 3D solar system
 - Planets, moons, dwarf planets, comets, spacecraft (NASA glTF models + procedural fallbacks)
-- **NASA planet & moon meshes** — Earth, Mars, Jupiter, Saturn, Moon, Io, Europa, Ganymede, Callisto, Titan, Enceladus (`public/models/nasa/`)
+- **NASA planet & moon meshes** — all 8 planets, 5 dwarf planets, 13 major moons, 12 spacecraft (`public/models/nasa/`)
+- **Starman's Roadster** — CC0 sports car glTF tinted cherry-red + procedural Starman (`public/models/roadster/`)
 - **Accretion disks** — shader-based disks for black holes, Sgr A*, and quasars (not generic glow spheres)
 - **Proportional moon scaling** — educational mode uses physical parent/moon radius ratios; cinematic adds a small readability boost
 - Asteroid & Kuiper belts, heliosphere, schematic Local Bubble, Oort cloud
@@ -82,6 +83,7 @@ npm install
 npm run dev        # http://localhost:8080
 npm test           # Vitest unit tests
 npm run fetch-exoplanets  # Refresh NASA Exoplanet Archive snapshot
+npm run fetch-nasa-models # Download/update vendored NASA + roadster glTF assets
 npm run test:e2e   # Playwright (starts dev server)
 npm run lint       # ESLint
 npm run build      # production build → dist/
@@ -121,7 +123,8 @@ src/
     exploreGroups.ts           Explore menu groupings
     starCatalog.ts             HYG database (auto-generated)
     properMotion.ts            Gaia/Hipparcos PM by star name
-    nasaModels.ts              glTF model paths
+    nasaModels.ts              NASA glTF model paths
+    roadsterModels.ts          Starman Roadster glTF path
   lib/
     constants.ts               Speed of light and derived constants
     lightJourney.ts            Birthday → light-years
@@ -136,7 +139,8 @@ src/
 e2e/
   explore-hud.spec.ts          Explore menu + URL restore regression
 public/
-  models/nasa/                 Vendored NASA glTF assets (~12 MB)
+  models/nasa/                 Vendored NASA glTF assets (~120 MB)
+  models/roadster/             Starman Roadster glTF (CC0, Poly Pizza)
 ```
 
 ## Physics & assumptions
