@@ -31,7 +31,7 @@ import {
   SUN_CORONA_OPACITY,
   SUN_CORONA_SCALE,
 } from "@/lib/glowStyle";
-import { bodyAccuracyBadges, globalAccuracyBadges } from "@/lib/accuracyBadges";
+import { bodyAccuracyBadges } from "@/lib/accuracyBadges";
 import {
   EXO_CINEMATIC,
   MOON_CINEMATIC,
@@ -2025,7 +2025,6 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
 
     const trueMoonPeriods = resolveTrueMoonPeriods(accuracyMode, trueOrbitsManual);
     const detailBadges = selected ? bodyAccuracyBadges(selected, { trueMoonPeriods }) : [];
-    const hudBadges = globalAccuracyBadges(accuracyMode);
 
     useLayoutEffect(() => {
       const c = clock.current;
@@ -2168,14 +2167,12 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
           />
         </Canvas>
 
-        {/* HUD */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-4">
-          <div className="pointer-events-auto flex min-h-11 items-center gap-2 self-stretch rounded-full glass px-3 py-2 md:self-auto">
-            <button onClick={togglePause} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
+        {/* HUD — playback + essentials only */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 md:inset-x-4">
+          <div className="pointer-events-auto flex min-h-10 max-w-[min(100%,20rem)] flex-1 items-center gap-2 rounded-full glass px-3 py-1.5">
+            <button onClick={togglePause} className="rounded-full px-2.5 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
               {paused ? "Play" : "Pause"}
             </button>
-            <span className="h-4 w-px bg-white/10" />
-            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Speed</span>
             <input
               type="range"
               min={0.1}
@@ -2183,27 +2180,43 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               step={0.1}
               value={speed}
               onChange={(e) => setSpeedVal(parseFloat(e.target.value))}
-              className="h-1 min-w-0 flex-1 cursor-pointer accent-primary md:w-24 md:flex-none"
+              aria-label="Simulation speed"
+              className="h-1 min-w-0 flex-1 cursor-pointer accent-primary"
             />
-            <span className="font-mono-num tnum w-10 shrink-0 text-xs text-primary">{speed.toFixed(1)}×</span>
+            <span className="font-mono-num tnum w-9 shrink-0 text-[11px] text-primary">{speed.toFixed(1)}×</span>
           </div>
 
-          <div className="pointer-events-auto flex min-h-11 items-center gap-1.5 overflow-x-auto rounded-full glass px-2 py-2 md:gap-2 md:px-2.5">
-            <button
-              onClick={toggleFullscreen}
-              title={isFs ? "Exit full screen" : "Full screen"}
-              className="flex items-center rounded-full px-2 py-1 text-foreground/90 transition-colors hover:text-primary"
-            >
-              {isFs ? <Minimize2 className="h-4 w-4" strokeWidth={1.5} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.5} />}
-            </button>
+          <div className="pointer-events-auto flex min-h-10 shrink-0 items-center gap-1 rounded-full glass px-1.5 py-1.5">
+            {focusName && focusName !== "Sun" && (
+              <button
+                onClick={() => {
+                  focus("Sun");
+                  setSelected(null);
+                }}
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-foreground/90 transition-colors hover:text-primary"
+              >
+                Sun
+              </button>
+            )}
+            {lightYears > 0 && (
+              <button
+                onClick={() => {
+                  focus("__light__");
+                  setAnimatingLight(true);
+                }}
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-beam transition-colors hover:text-beam/80"
+              >
+                My light
+              </button>
+            )}
             <button
               onClick={() => setExploreOpen((v) => !v)}
               title="Jump to a destination"
               data-testid="explore-trigger"
-              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
+              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-foreground/90 transition-colors hover:text-primary"
             >
-              <Compass className="h-4 w-4" strokeWidth={1.5} />
-              Explore
+              <Compass className="h-3.5 w-3.5" strokeWidth={1.5} />
+              <span className="hidden sm:inline">Explore</span>
             </button>
             <button
               type="button"
@@ -2211,57 +2224,34 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
                 onAccuracyModeChange?.(accuracyMode === "educational" ? "cinematic" : "educational")
               }
               title={`Accuracy: ${ACCURACY_MODE_LABEL[accuracyMode]}`}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                 accuracyMode === "educational"
                   ? "bg-primary/15 text-primary"
-                  : "text-foreground/90 hover:text-primary"
+                  : "text-foreground/80 hover:text-primary"
               }`}
             >
               <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.5} />
-              <span className="hidden sm:inline">{ACCURACY_MODE_LABEL[accuracyMode]}</span>
             </button>
             {accuracyMode === "cinematic" && (
               <button
                 type="button"
                 onClick={() => onTrueOrbitsChange?.(!trueOrbitsManual)}
-                title={trueOrbitsManual ? "Moons & exoplanets: true periods" : "Moons & exoplanets: cinematic"}
-                className={`hidden rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors sm:inline-block ${
+                title={trueOrbitsManual ? "True moon & exoplanet periods" : "Cinematic moon & exoplanet periods"}
+                data-testid="true-orbits-toggle"
+                className={`hidden rounded-full px-2 py-1 text-[10px] font-medium transition-colors sm:inline-block ${
                   trueOrbitsManual ? "bg-beam/15 text-beam" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {trueOrbitsManual ? "True orbits" : "Cinematic orbits"}
+                {trueOrbitsManual ? "True" : "Cine"}
               </button>
             )}
-            {focusName && (
-              <button
-                onClick={() => {
-                  focus("Sun");
-                  setSelected(null);
-                }}
-                className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
-              >
-                ← Sun
-              </button>
-            )}
-            {lightYears > 0 && (
-              <>
-                <button
-                  onClick={() => {
-                    focus("__light__");
-                    setAnimatingLight(true);
-                  }}
-                  className="rounded-full px-3 py-1 text-xs font-medium text-beam transition-colors hover:text-beam/80"
-                >
-                  Zoom to my light
-                </button>
-                <button onClick={() => setFlying((v) => !v)} className="hidden rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary sm:inline-block">
-                  {flying ? "Stop" : "Flythrough"}
-                </button>
-                <button onClick={exportPNG} title="Save frame as PNG" className="hidden rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary sm:inline-block">
-                  Save
-                </button>
-              </>
-            )}
+            <button
+              onClick={toggleFullscreen}
+              title={isFs ? "Exit full screen" : "Full screen"}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-foreground/80 transition-colors hover:text-primary"
+            >
+              {isFs ? <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} /> : <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.5} />}
+            </button>
           </div>
         </div>
 
@@ -2278,9 +2268,6 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               <span className="text-muted-foreground">Your light through the years</span>
               <span className="font-mono-num tnum shrink-0 text-beam">{displayLY.toFixed(1)} ly · age {Math.round(scrubYears ?? lightYears)}</span>
             </div>
-            <p className="mb-1.5 hidden text-center text-[10px] text-muted-foreground/70 sm:block">
-              Scrubbing also nudges star positions (proper motion). Run the sim to watch planets and stars drift together.
-            </p>
             <input
               type="range"
               min={0}
@@ -2290,17 +2277,12 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               onChange={(e) => { const v = parseFloat(e.target.value); setScrubYears(v >= lightYears - 0.05 ? null : v); }}
               className="h-1 w-full cursor-pointer accent-beam"
             />
-            {yourStar && (
-              <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
-                {displayLY >= yourStar.ly ? (
-                  <>
-                    Farthest star reached:{" "}
-                    <button onClick={() => onPick(yourStar.name)} className="font-medium text-primary hover:underline">{yourStar.name}</button>{" "}
-                    ({yourStar.ly} ly)
-                  </>
-                ) : (
-                  <>Your light is {displayLY.toFixed(1)} ly out, still reaching…</>
-                )}
+            {yourStar && displayLY >= yourStar.ly && (
+              <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+                Farthest:{" "}
+                <button onClick={() => onPick(yourStar.name)} className="font-medium text-primary hover:underline">
+                  {yourStar.name}
+                </button>
               </p>
             )}
           </div>
@@ -2397,36 +2379,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               <a href={detail.links.nasa} target="_blank" rel="noopener noreferrer" className="text-muted-foreground transition-colors hover:text-foreground">NASA</a>
             </div>
           </div>
-        ) : (
-          <div className="pointer-events-none absolute left-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] max-w-[11rem] rounded-xl glass px-3 py-2 text-[10px] leading-snug text-muted-foreground md:left-4 md:top-4 md:max-w-[13rem] md:text-[11px]">
-            {focusName ? (
-              <span>
-                Focused on <span className="font-medium text-foreground">{focusName}</span>.
-                {isMobile ? " Pinch to zoom · tap for details." : " Drag to orbit · scroll to zoom · click any body for details."}
-              </span>
-            ) : (
-              <span>
-                {isMobile
-                  ? "Pinch to zoom · one finger to orbit · tap any body for details."
-                  : "Real orbits · the light sphere is a one-way travel metaphor. Click any body for details, or scroll to zoom."}
-              </span>
-            )}
-          </div>
-        )}
-        <div className="pointer-events-none absolute right-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] hidden flex-col items-end gap-1.5 sm:flex md:right-4 md:top-4">
-          <span className="rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground">
-            {showMinor ? "moons + dwarfs visible" : "zoom in for moons & dwarfs"}
-          </span>
-          {hudBadges.map((b) => (
-            <span
-              key={b.label}
-              title={b.title}
-              className="max-w-[14rem] rounded-full glass px-2.5 py-1 text-[10px] text-muted-foreground/80"
-            >
-              {b.label}
-            </span>
-          ))}
-        </div>
+        ) : null}
 
         <ExploreMenu
           open={exploreOpen}

@@ -142,3 +142,13 @@ export function defaultHullForMode(mode: PropulsionMode): VesselHullId {
   const match = VESSEL_HULLS.find((h) => h.defaultModes.includes(mode));
   return match?.id ?? DEFAULT_HULL_ID;
 }
+
+/** Pick propulsion for a hull — keeps current mode when the hull supports it. */
+export function defaultModeForHull(
+  hullId: VesselHullId,
+  currentMode?: PropulsionMode,
+): PropulsionMode {
+  const hull = findHullPreset(hullId);
+  if (currentMode && hull.defaultModes.includes(currentMode)) return currentMode;
+  return hull.defaultModes[0];
+}

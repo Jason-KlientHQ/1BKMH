@@ -11,7 +11,7 @@ import {
   type VesselConfig,
 } from "@/mission/types";
 import { useIsMobile } from "@/hooks/useMediaQuery";
-import { VESSEL_HULLS, defaultHullForMode } from "@/data/vesselPresets";
+import { VESSEL_HULLS, defaultHullForMode, defaultModeForHull, findHullPreset } from "@/data/vesselPresets";
 import type { VesselHullId } from "@/data/vesselPresets";
 
 interface MissionPlannerProps {
@@ -57,15 +57,25 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
       vessel: { ...mission.vessel, hullId: defaultHullForMode(mode) },
     });
 
+  const setHull = (hullId: VesselHullId) =>
+    onChange({
+      ...mission,
+      mode: defaultModeForHull(hullId, mission.mode),
+      vessel: { ...mission.vessel, hullId },
+    });
+
   const patchVessel = (patch: Partial<VesselConfig>) =>
     onChange({ ...mission, vessel: { ...mission.vessel, ...patch } });
+
+  const hullPreset = findHullPreset(mission.vessel.hullId);
+  const modeMeta = PROPULSION_MODES.find((m) => m.id === mission.mode);
 
   if (!open) {
     return (
       <button
         onClick={onToggle}
         title="Open star navigator"
-        className="pointer-events-auto absolute right-3 top-[calc(6.5rem+env(safe-area-inset-top,0px))] z-20 flex min-h-11 items-center gap-2 rounded-full glass px-4 py-2.5 text-xs font-semibold text-foreground/90 transition-colors hover:text-primary md:right-4 md:top-20"
+        className="pointer-events-auto absolute right-3 top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-20 flex min-h-11 items-center gap-2 rounded-full glass px-4 py-2.5 text-xs font-semibold text-foreground/90 transition-colors hover:text-primary md:right-4 md:top-14"
       >
         <Compass className="h-4 w-4" strokeWidth={1.5} />
         Navigate
@@ -141,34 +151,6 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
               <p className="mt-1.5 text-[10px] text-muted-foreground/70">Or click any star in the map</p>
             </Field>
 
-            {/* Propulsion */}
-            <Field label="Propulsion">
-              <div className="grid gap-1.5">
-                {PROPULSION_MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setMode(m.id)}
-                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-all ${
-                      mission.mode === m.id
-                        ? "border-beam/40 bg-beam/[0.08] text-foreground"
-                        : "border-white/8 bg-white/[0.02] text-muted-foreground hover:border-white/15 hover:text-foreground"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 font-medium">
-                      {m.label}
-                      {m.speculative && (
-                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300/90">
-                          hypothetical
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block text-[10px] opacity-70">{m.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </Field>
-
             {/* Vessel */}
             <Field label="Vessel mass">
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -193,10 +175,10 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
               <span className="mt-1 block text-[10px] text-muted-foreground">Dry mass (kg)</span>
             </Field>
 
-            <Field label="Hull">
+            <Field label="Hull & propulsion">
               <select
                 value={mission.vessel.hullId}
-                onChange={(e) => patchVessel({ hullId: e.target.value as VesselHullId })}
+                onChange={(e) => setHull(e.target.value as VesselHullId)}
                 className="w-full rounded-lg border border-white/10 bg-background/60 px-3 py-2 text-sm text-foreground outline-none [color-scheme:dark] focus:border-beam/40"
               >
                 {VESSEL_HULLS.map((h) => (
@@ -205,6 +187,20 @@ export const MissionPlanner = ({ open, onToggle, mission, onChange, onNavigate }
                   </option>
                 ))}
               </select>
+              {modeMeta && (
+                <p className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+                  <span className="font-medium text-foreground">{modeMeta.label}</span>
+                  {modeMeta.speculative && (
+                    <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300/90">
+                      hypothetical
+                    </span>
+                  )}
+                  <span className="mt-0.5 block opacity-80">{modeMeta.desc}</span>
+                  <span className="mt-1 block text-[10px] opacity-60">
+                    Tied to {hullPreset.label}. Use compare below to try other modes.
+                  </span>
+                </p>
+              )}
             </Field>
 
             {/* Mode-specific inputs */}
