@@ -214,6 +214,14 @@ const Explore = () => {
           )}
 
           <button
+            onClick={() => setReadmeOpen(true)}
+            title="How this works"
+            className="hidden h-10 items-center rounded-full glass px-3 text-[11px] text-muted-foreground transition-colors hover:text-primary sm:flex"
+          >
+            How it works
+          </button>
+
+          <button
             onClick={toggle}
             title={muted ? "Unmute" : "Mute"}
             className="flex h-10 w-10 items-center justify-center rounded-full glass text-foreground/80 transition-colors hover:text-primary"

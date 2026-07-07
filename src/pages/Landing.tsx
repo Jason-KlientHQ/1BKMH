@@ -1,39 +1,25 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowUpRight, Github, Sparkles, Telescope, Users } from "lucide-react";
+import { lazy, Suspense, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, Github, Telescope, Users } from "lucide-react";
 import { StarField } from "@/components/StarField";
-import { buildShareQuery } from "@/lib/lightJourney";
 
 const GITHUB_URL = "https://github.com/Jason-KlientHQ/birthday-light-journey";
 
-const Landing = () => {
-  const navigate = useNavigate();
-  const [bday, setBday] = useState("");
-  const [useLeap, setUseLeap] = useState(true);
-  const [error, setError] = useState("");
+const TechnicalReadme = lazy(() =>
+  import("@/components/TechnicalReadme").then((m) => ({ default: m.TechnicalReadme })),
+);
 
-  const enterApp = (withBirthday = false) => {
-    if (withBirthday) {
-      if (!bday) {
-        setError("Pick your birthday, or enter without one and set it inside the sky.");
-        return;
-      }
-      const today = new Date().toISOString().split("T")[0];
-      if (bday > today) {
-        setError("Your birthday has to be in the past.");
-        return;
-      }
-      const qs = buildShareQuery(bday, useLeap);
-      navigate(`/explore${qs}`);
-      return;
-    }
-    navigate("/explore");
-  };
+const Landing = () => {
+  const [readmeOpen, setReadmeOpen] = useState(false);
 
   return (
     <main className="relative min-h-[100dvh] overflow-x-hidden">
       <StarField />
       <div className="grain-overlay" />
+
+      <Suspense fallback={null}>
+        <TechnicalReadme open={readmeOpen} onClose={() => setReadmeOpen(false)} />
+      </Suspense>
 
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
         <div className="animate-aurora absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,hsl(42_90%_50%/0.16),transparent_65%)] blur-2xl" />
@@ -42,11 +28,6 @@ const Landing = () => {
 
       <div className="relative z-10 mx-auto max-w-3xl px-5 py-[max(2rem,env(safe-area-inset-top))] pb-24">
         <header className="mb-14 text-center">
-          <span className="animate-float-up mb-6 inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.22em] text-primary/90">
-            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
-            A cosmic birthday gift
-          </span>
-
           <h1
             className="animate-float-up font-display text-[clamp(2.5rem,8vw,5rem)] font-bold leading-[0.95] tracking-[-0.03em] text-balance"
             style={{ opacity: 0 }}
@@ -65,9 +46,20 @@ const Landing = () => {
             something you can fly through — a growing sphere of light, real orbits, and a map of the
             neighborhood around the Sun.
           </p>
+
+          <Link
+            to="/explore"
+            className="animate-float-up group mt-10 inline-flex h-12 items-center justify-center gap-3 rounded-xl bg-primary py-3 pl-6 pr-3 font-semibold text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.6)] transition-all duration-500 ease-fluid hover:shadow-[0_10px_40px_-6px_hsl(var(--primary)/0.75)] active:scale-[0.98] [animation-delay:0.18s]"
+            style={{ opacity: 0 }}
+          >
+            Explore
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-foreground/15 transition-transform duration-500 ease-fluid group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+              <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
+            </span>
+          </Link>
         </header>
 
-        <section className="animate-float-up glass-shell [animation-delay:0.18s]" style={{ opacity: 0 }}>
+        <section className="animate-float-up glass-shell [animation-delay:0.24s]" style={{ opacity: 0 }}>
           <div className="glass-core space-y-8 p-6 sm:p-9">
             <div>
               <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
@@ -128,63 +120,17 @@ const Landing = () => {
                 <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.5} />
               </a>
             </div>
-
-            <div className="border-t border-white/8 pt-6">
-              <label htmlFor="landing-bday" className="block text-sm font-medium text-foreground/80">
-                When were you born? <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <div className="mt-2.5 flex flex-col gap-3 sm:flex-row">
-                <input
-                  id="landing-bday"
-                  type="date"
-                  value={bday}
-                  onChange={(e) => {
-                    setBday(e.target.value);
-                    setError("");
-                  }}
-                  max={new Date().toISOString().split("T")[0]}
-                  className="h-12 flex-1 rounded-xl border border-white/10 bg-background/60 px-4 py-3 text-base text-foreground outline-none ring-primary/50 transition-all duration-300 [color-scheme:dark] focus:border-primary/40 focus:ring-2"
-                />
-                <button
-                  onClick={() => enterApp(true)}
-                  className="group flex h-12 items-center justify-center gap-3 rounded-xl bg-primary py-3 pl-5 pr-2.5 font-semibold text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.6)] transition-all duration-500 ease-fluid hover:shadow-[0_10px_40px_-6px_hsl(var(--primary)/0.75)] active:scale-[0.98]"
-                >
-                  Enter with my birthday
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-foreground/15 transition-transform duration-500 ease-fluid group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                    <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
-                  </span>
-                </button>
-              </div>
-
-              <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={useLeap}
-                  onChange={(e) => setUseLeap(e.target.checked)}
-                  className="h-4 w-4 cursor-pointer rounded border-white/20 bg-background/60 accent-primary [color-scheme:dark]"
-                />
-                Account for leap years (365.25 days)
-              </label>
-
-              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-
-              <button
-                onClick={() => enterApp(false)}
-                className="mt-5 w-full rounded-xl border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-foreground/90 transition-colors hover:border-primary/30 hover:text-primary"
-              >
-                Enter the sky without a birthday
-              </button>
-            </div>
           </div>
         </section>
 
         <footer className="mt-12 text-center text-xs text-muted-foreground/60">
-          <p>
-            Distances and stars are approximate — wonder over precision.{" "}
-            <Link to="/explore" className="text-muted-foreground/80 underline decoration-dotted underline-offset-4 hover:text-primary">
-              Skip to the app
-            </Link>
-          </p>
+          <p>Distances and stars are approximate — wonder over precision.</p>
+          <button
+            onClick={() => setReadmeOpen(true)}
+            className="mt-3 text-muted-foreground/80 underline decoration-dotted underline-offset-4 transition-colors hover:text-primary"
+          >
+            How this works — calculations &amp; assumptions
+          </button>
         </footer>
       </div>
     </main>
