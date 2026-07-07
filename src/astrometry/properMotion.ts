@@ -5,6 +5,7 @@ import {
   unitDirection,
   type Vec3,
 } from "@/astrometry/positions";
+import { computeOrbitalEpoch, DEFAULT_CLOCK_ANCHOR, type EpochInput } from "@/lib/simEpoch";
 
 const DEG = Math.PI / 180;
 const MAS_TO_DEG = 1 / (3600 * 1000);
@@ -53,15 +54,17 @@ export function starUnitDirAtEpoch(baseDir: Vec3, name: string, yearsFromJ2000: 
 
 /**
  * Years since J2000.0 for stellar proper motion.
- * Combines live simulation time with life-timeline scrub offset.
+ * Aligned with heliocentric orbital epoch (birth-tied when available).
  */
 export function starEpochYears(
   clockYears: number,
   scrubYears: number | null,
   lifeYears: number,
+  birthDate?: string,
+  clockAnchor = DEFAULT_CLOCK_ANCHOR,
 ): number {
-  const lifeDelta = scrubYears != null ? scrubYears - lifeYears : 0;
-  return clockYears + lifeDelta;
+  const input: EpochInput = { birthDate, lifeYears, scrubYears, clockYears, clockAnchor };
+  return computeOrbitalEpoch(input);
 }
 
 /** Log-scaled scene position with proper motion at `yearsFromJ2000`. */

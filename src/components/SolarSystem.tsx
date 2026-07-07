@@ -10,8 +10,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import * as THREE from "three";
-import { X, Maximize2, Minimize2, Radio, Compass, Navigation } from "lucide-react";
+import { X, Maximize2, Minimize2, Radio, Compass, Navigation, Info, GraduationCap } from "lucide-react";
+import { computeOrbitalEpoch, DEFAULT_CLOCK_ANCHOR } from "@/lib/simEpoch";
+import { earthCraftScenePosition } from "@/lib/earthOrbit";
+import {
+  ACCURACY_MODE_LABEL,
+  resolveTrueMoonPeriods,
+  type AccuracyMode,
+} from "@/lib/accuracyMode";
+import { bodyAccuracyBadges, globalAccuracyBadges } from "@/lib/accuracyBadges";
 import { getBodyInfo, formatArrival, arrivalYear } from "@/data/bodyInfo";
 import { eventForYear } from "@/data/worldEvents";
 import {
@@ -48,10 +57,7 @@ import {
   type CosmicLandmark,
 } from "@/data/solarSystem";
 import { STAR_CATALOG } from "@/data/starCatalog";
-import {
-  starEpochYears,
-  starScenePositionAtEpoch,
-} from "@/astrometry/properMotion";
+import { starScenePositionAtEpoch } from "@/astrometry/properMotion";
 import { GltfWithFallback, preloadNasaModels } from "@/components/GltfModel";
 import { SpacecraftModel } from "@/components/SpacecraftModels";
 import { NASA_GLTF } from "@/data/nasaModels";
@@ -65,13 +71,26 @@ import type { MissionOrigin, MissionResult, PropulsionMode } from "@/mission/typ
 
 interface SimClock {
   years: number;
+  anchor: number;
+  orbitalYears: number;
   speed: number;
   paused: boolean;
   camDist: number;
 }
 
 const BASE_YEARS_PER_SEC = 0.08; // calmer default (Earth ~12.5s/orbit at 1×)
-const EPOCH_OFFSET = 26.5;
+
+function moonOrbitRate(periodDays: number, truePeriods: boolean): number {
+  const absDays = Math.abs(periodDays);
+  const dir = periodDays < 0 ? -1 : 1;
+  if (truePeriods) {
+    const periodYears = absDays / 365.25;
+    return ((2 * Math.PI) / periodYears) * dir;
+  }
+  const norm = Math.min(Math.max((Math.log(absDays) - Math.log(1.3)) / (Math.log(80) - Math.log(1.3)), 0), 1);
+  const displaySec = 12 + norm * 40;
+  return ((2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec)) * dir;
+}
 const CAMERA_FOV = 55;
 const HALF_FOV = (CAMERA_FOV * Math.PI) / 180 / 2;
 const MAX_ZOOM = 30_000; // covers the largest light sphere + the nearest stars
@@ -85,30 +104,24 @@ const frameDistanceFor = (reach: number) =>
 const starScenePos = (s: StarPOI, epochYears: number): THREE.Vector3 =>
   new THREE.Vector3(...starScenePositionAtEpoch(s.distance, s.dir, s.name, epochYears));
 
-const bodyScenePos = (
-  name: string,
-  clockYears: number,
-  scrubYears: number | null,
-  lifeYears: number,
-): THREE.Vector3 => {
-  const epoch = starEpochYears(clockYears, scrubYears, lifeYears);
+const bodyScenePos = (name: string, orbitalYears: number): THREE.Vector3 => {
   if (name === "__light__" || name === "Sun") return new THREE.Vector3(0, 0, 0);
   const p = PLANETS.find((b) => b.name === name);
   if (p) {
-    const [x, y, z] = toScenePosition(heliocentricAU(p, clockYears));
+    const [x, y, z] = toScenePosition(heliocentricAU(p, orbitalYears));
     return new THREE.Vector3(x, y, z);
   }
   const c = COMETS.find((b) => b.name === name);
   if (c) {
-    const [x, y, z] = toScenePosition(heliocentricAU(c, clockYears));
+    const [x, y, z] = toScenePosition(heliocentricAU(c, orbitalYears));
     return new THREE.Vector3(x, y, z);
   }
   if (name === ROADSTER.name) {
-    const [x, y, z] = toScenePosition(heliocentricAU(ROADSTER, clockYears));
+    const [x, y, z] = toScenePosition(heliocentricAU(ROADSTER, orbitalYears));
     return new THREE.Vector3(x, y, z);
   }
   const s = NEARBY_STARS.find((b) => b.name === name);
-  if (s) return starScenePos(s, epoch);
+  if (s) return starScenePos(s, orbitalYears);
   const bh = BLACK_HOLES.find((b) => b.name === name);
   if (bh) return new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY));
   const landmark = COSMIC_LANDMARKS.find((b) => b.name === name);
@@ -118,15 +131,16 @@ const bodyScenePos = (
   const e = EXOPLANETS.find((b) => b.name === name);
   if (e) {
     const host = NEARBY_STARS.find((b) => b.name === e.host);
-    if (host) return starScenePos(host, epoch);
+    if (host) return starScenePos(host, orbitalYears);
   }
   const cat = STAR_CATALOG.find((b) => b.name === name);
-  if (cat) return new THREE.Vector3(...starScenePositionAtEpoch(cat.ly, cat.pos, cat.name, epoch));
+  if (cat) return new THREE.Vector3(...starScenePositionAtEpoch(cat.ly, cat.pos, cat.name, orbitalYears));
   const sc = SPACECRAFT.find((b) => b.name === name);
   if (sc) {
     if (sc.orbit === "earth") {
-      const earth = PLANETS.find((b) => b.name === "Earth")!;
-      const [x, y, z] = toScenePosition(heliocentricAU(earth, years));
+      const earthCrafts = SPACECRAFT.filter((x) => x.orbit === "earth");
+      const idx = earthCrafts.findIndex((x) => x.name === name);
+      const [x, y, z] = earthCraftScenePosition(sc, Math.max(0, idx), orbitalYears);
       return new THREE.Vector3(x, y, z);
     }
     return new THREE.Vector3(...(sc.dir ?? [1, 0, 0])).normalize().multiplyScalar(scaleDistanceAU(sc.distanceAU ?? 1));
@@ -246,9 +260,15 @@ const EXPLORE_GROUPS: { label: string; items: string[] }[] = [
 const TimeKeeper = ({
   clock,
   onZoom,
+  birthDate,
+  lifeYears,
+  scrubYears,
 }: {
   clock: React.MutableRefObject<SimClock>;
   onZoom: (near: boolean) => void;
+  birthDate: string;
+  lifeYears: number;
+  scrubYears: number | null;
 }) => {
   const { camera, controls } = useThree() as {
     camera: THREE.PerspectiveCamera;
@@ -258,6 +278,13 @@ const TimeKeeper = ({
   useFrame((_, delta) => {
     const c = clock.current;
     if (!c.paused) c.years += delta * BASE_YEARS_PER_SEC * c.speed;
+    c.orbitalYears = computeOrbitalEpoch({
+      birthDate,
+      lifeYears,
+      scrubYears,
+      clockYears: c.years,
+      clockAnchor: c.anchor,
+    });
     const target = controls?.target ?? tmp.set(0, 0, 0);
     const d = camera.position.distanceTo(target as THREE.Vector3);
     c.camDist = d;
@@ -394,7 +421,7 @@ const Planet = ({
 
   useFrame(() => {
     if (!orbitRef.current) return;
-    const au = heliocentricAU(body, clock.current.years);
+    const au = heliocentricAU(body, clock.current.orbitalYears);
     const [x, y, z] = toScenePosition(au);
     orbitRef.current.position.set(x, y, z);
     if (spinRef.current) spinRef.current.rotation.y += 0.008;
@@ -518,12 +545,14 @@ const MoonBody = ({
   parent,
   clock,
   show,
+  trueMoonPeriods,
   onFocus,
 }: {
   moon: Moon;
   parent: Body;
   clock: React.MutableRefObject<SimClock>;
   show: boolean;
+  trueMoonPeriods: boolean;
   onFocus: (name: string) => void;
 }) => {
   const ref = useRef<THREE.Group>(null);
@@ -531,22 +560,16 @@ const MoonBody = ({
   const r = Math.max(0.08, scaleRadiusKm(moon.radiusKm) * 0.8);
   const incl = (moon.inclDeg * Math.PI) / 180;
 
-  // Calm, compressed cadence: real relative periods make the fastest moons blur.
-  // Map each moon's period into a gentle 12–52 s/orbit range (at 1× speed),
-  // preserving order & retrograde direction. Wonder over precision.
-  const { rate } = useMemo(() => {
-    const absDays = Math.abs(moon.periodDays);
-    const dir = moon.periodDays < 0 ? -1 : 1;
-    const norm = Math.min(Math.max((Math.log(absDays) - Math.log(1.3)) / (Math.log(80) - Math.log(1.3)), 0), 1);
-    const displaySec = 12 + norm * 40;
-    return { rate: ((2 * Math.PI) / (BASE_YEARS_PER_SEC * displaySec)) * dir };
-  }, [moon.periodDays]);
+  const rate = useMemo(
+    () => moonOrbitRate(moon.periodDays, trueMoonPeriods),
+    [moon.periodDays, trueMoonPeriods],
+  );
 
   useFrame(() => {
     if (!ref.current || !show) return;
-    const au = heliocentricAU(parent, clock.current.years);
+    const au = heliocentricAU(parent, clock.current.orbitalYears);
     const [px, py, pz] = toScenePosition(au);
-    const ang = clock.current.years * rate;
+    const ang = clock.current.orbitalYears * rate;
     const lx = Math.cos(ang) * localR;
     const lz = Math.sin(ang) * localR * Math.cos(incl);
     const ly = Math.sin(ang) * localR * Math.sin(incl);
@@ -604,7 +627,7 @@ const CometBody = ({
   const tailLen = 12;
 
   useFrame(() => {
-    const au = heliocentricAU(comet, clock.current.years);
+    const au = heliocentricAU(comet, clock.current.orbitalYears);
     const [x, y, z] = toScenePosition(au);
     posV.set(x, y, z);
     nucleusRef.current?.position.copy(posV);
@@ -663,7 +686,7 @@ const RoadsterBody = ({
   const wheels: [number, number][] = [[0.72, 0.5], [0.72, -0.5], [-0.72, 0.5], [-0.72, -0.5]];
 
   useFrame((_, dt) => {
-    const au = heliocentricAU(ROADSTER, clock.current.years);
+    const au = heliocentricAU(ROADSTER, clock.current.orbitalYears);
     const [x, y, z] = toScenePosition(au);
     ref.current?.position.set(x, y, z);
     if (carRef.current) {
@@ -813,7 +836,7 @@ const ExoPlanetBody = ({
 
   useFrame(() => {
     if (!ref.current || !show) return;
-    const ang = clock.current.years * rate;
+    const ang = clock.current.orbitalYears * rate;
     ref.current.position.set(Math.cos(ang) * localR, Math.sin(ang) * localR * 0.12, Math.sin(ang) * localR);
   });
 
@@ -906,21 +929,18 @@ const EarthSatellites = ({
   show: boolean;
   onFocus: (name: string) => void;
 }) => {
-  const earth = useMemo(() => PLANETS.find((b) => b.name === "Earth")!, []);
   const list = useMemo(() => SPACECRAFT.filter((s) => s.orbit === "earth"), []);
-  const earthSize = scaleRadiusKm(earth.radiusKm);
   const refs = useRef<(THREE.Group | null)[]>([]);
 
   useFrame(() => {
     if (!show) return;
-    const [ex, ey, ez] = toScenePosition(heliocentricAU(earth, clock.current.years));
+    const t = clock.current.orbitalYears;
     list.forEach((s, i) => {
       const g = refs.current[i];
       if (!g) return;
-      const localR = earthSize * 1.18 + 0.25 + i * 0.35;
-      const ang = clock.current.years * (60 + i * 40); // fast LEO, but calm at 0.1x
-      g.position.set(ex + Math.cos(ang) * localR, ey + Math.sin(ang) * localR * 0.3, ez + Math.sin(ang) * localR);
-      g.rotation.y = clock.current.years * (0.5 + i * 0.3);
+      const [x, y, z] = earthCraftScenePosition(s, i, t);
+      g.position.set(x, y, z);
+      g.rotation.y = t * (2 + i * 0.4);
     });
   });
 
@@ -1047,7 +1067,7 @@ const CatalogStars = ({
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    const epoch = starEpochYears(clock.current.years, scrubYears, lightYears);
+    const epoch = clock.current.orbitalYears;
     const m = new THREE.Matrix4();
     list.forEach((s, i) => {
       const [px, py, pz] = starScenePositionAtEpoch(s.ly, s.pos, s.name, epoch);
@@ -1118,7 +1138,7 @@ const NearbyStars = ({
   const groupRefs = useRef<(THREE.Group | null)[]>([]);
 
   useFrame(() => {
-    const epoch = starEpochYears(clock.current.years, scrubYears, lightYears);
+    const epoch = clock.current.orbitalYears;
     placed.forEach(({ star }, i) => {
       const g = groupRefs.current[i];
       if (!g) return;
@@ -1284,7 +1304,7 @@ const CameraDirector = ({
     }
     if (s.phase === "idle") return;
 
-    const targetNow = bodyScenePos(s.name, clock.current.years, scrubYears, reach);
+    const targetNow = bodyScenePos(s.name, clock.current.orbitalYears);
 
     if (s.phase === "fly") {
       if (s.t0 === null) s.t0 = state.clock.getElapsedTime();
@@ -1379,7 +1399,7 @@ const Belt = ({
   }, [inner, outer, count, thickness]);
 
   useFrame(() => {
-    if (ref.current) ref.current.rotation.y = (clock.current.years / meanPeriodYears) * 2 * Math.PI;
+    if (ref.current) ref.current.rotation.y = (clock.current.orbitalYears / meanPeriodYears) * 2 * Math.PI;
   });
 
   return (
@@ -1516,9 +1536,11 @@ const Scene = ({
   clock,
   showMinor,
   setShowMinor,
+  birthDate,
   lightYears,
   scrubYears,
   displayLY,
+  trueMoonPeriods,
   animatingLight,
   setAnimatingLight,
   flying,
@@ -1538,9 +1560,11 @@ const Scene = ({
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
   setShowMinor: (v: boolean) => void;
+  birthDate: string;
   lightYears: number;
   scrubYears: number | null;
   displayLY: number;
+  trueMoonPeriods: boolean;
   isMobile: boolean;
   missionHudActive: boolean;
   animatingLight: boolean;
@@ -1562,7 +1586,7 @@ const Scene = ({
     {/* layered, denser, faintly-coloured starfield — more wonder */}
     <Stars radius={4000} depth={600} count={isMobile ? 5000 : 16000} factor={9} saturation={0.4} fade speed={REDUCED_MOTION ? 0 : 0.2} />
     <Stars radius={9000} depth={200} count={isMobile ? 2500 : 7000} factor={22} saturation={0.6} fade speed={REDUCED_MOTION ? 0 : 0.1} />
-    <TimeKeeper clock={clock} onZoom={setShowMinor} />
+    <TimeKeeper clock={clock} onZoom={setShowMinor} birthDate={birthDate} lifeYears={lightYears} scrubYears={scrubYears} />
 
     <EclipticGrid />
     <Sun onFocus={onFocus} />
@@ -1573,7 +1597,17 @@ const Scene = ({
 
     {MOONS.map((m) => {
       const parent = PLANETS.find((p) => p.name === m.parent)!;
-      return <MoonBody key={m.name} moon={m} parent={parent} clock={clock} show={showMinor} onFocus={onFocus} />;
+      return (
+        <MoonBody
+          key={m.name}
+          moon={m}
+          parent={parent}
+          clock={clock}
+          show={showMinor}
+          trueMoonPeriods={trueMoonPeriods}
+          onFocus={onFocus}
+        />
+      );
     })}
 
     {COMETS.map((c) => (
@@ -1605,7 +1639,7 @@ const Scene = ({
         missionOrigin={missionOrigin}
         tripProgress={tripProgress}
         missionFlying={missionFlying}
-        simYears={clock.current.years}
+        simYears={clock.current.orbitalYears}
         controlsRef={controlsRef}
       />
     ) : (
@@ -1659,6 +1693,8 @@ interface SolarSystemProps {
   lightYears?: number;
   birthDate?: string;
   destination?: string | null;
+  accuracyMode?: AccuracyMode;
+  onAccuracyModeChange?: (mode: AccuracyMode) => void;
   onDestinationSelect?: (name: string) => void;
   onSetMissionDestination?: (name: string) => void;
   missionResult?: MissionResult | null;
@@ -1675,6 +1711,8 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
       lightYears = 0,
       birthDate = "",
       destination = null,
+      accuracyMode = "cinematic",
+      onAccuracyModeChange,
       onDestinationSelect,
       onSetMissionDestination,
       missionResult = null,
@@ -1685,7 +1723,14 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     },
     ref,
   ) => {
-    const clock = useRef<SimClock>({ years: EPOCH_OFFSET, speed: 0.1, paused: false, camDist: 80 });
+    const clock = useRef<SimClock>({
+      years: DEFAULT_CLOCK_ANCHOR,
+      anchor: DEFAULT_CLOCK_ANCHOR,
+      orbitalYears: DEFAULT_CLOCK_ANCHOR,
+      speed: 0.1,
+      paused: false,
+      camDist: 80,
+    });
     const controlsRef = useRef<OrbitControlsImpl | null>(null);
     const glRef = useRef<THREE.WebGLRenderer | null>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1704,8 +1749,24 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
     const [selected, setSelected] = useState<string | null>(null);
     const [isFs, setIsFs] = useState(false);
     const [exploreOpen, setExploreOpen] = useState(false);
+    const [trueMoonsManual, setTrueMoonsManual] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const goalToken = useRef(0);
+
+    const trueMoonPeriods = resolveTrueMoonPeriods(accuracyMode, trueMoonsManual);
+    const detailBadges = selected ? bodyAccuracyBadges(selected, { trueMoonPeriods }) : [];
+    const hudBadges = globalAccuracyBadges(accuracyMode);
+
+    useLayoutEffect(() => {
+      const c = clock.current;
+      c.orbitalYears = computeOrbitalEpoch({
+        birthDate,
+        lifeYears: lightYears,
+        scrubYears,
+        clockYears: c.years,
+        clockAnchor: c.anchor,
+      });
+    }, [birthDate, lightYears, scrubYears]);
 
     // Fly the camera to focus a body (Sun / planet / star / light).
     const focus = (name: string) => {
@@ -1809,9 +1870,11 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             clock={clock}
             showMinor={showMinor}
             setShowMinor={setShowMinor}
+            birthDate={birthDate}
             lightYears={lightYears}
             scrubYears={scrubYears}
             displayLY={displayLY}
+            trueMoonPeriods={trueMoonPeriods}
             animatingLight={animatingLight}
             setAnimatingLight={setAnimatingLight}
             flying={flying}
@@ -1831,7 +1894,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
         </Canvas>
 
         {/* HUD */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-4">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-4">
           <div className="pointer-events-auto flex min-h-11 items-center gap-2 self-stretch rounded-full glass px-3 py-2 md:self-auto">
             <button onClick={togglePause} className="rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary">
               {paused ? "Play" : "Pause"}
@@ -1858,34 +1921,41 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             >
               {isFs ? <Minimize2 className="h-4 w-4" strokeWidth={1.5} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.5} />}
             </button>
-            <div className="relative">
+            <button
+              onClick={() => setExploreOpen((v) => !v)}
+              title="Jump to a destination"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
+            >
+              <Compass className="h-4 w-4" strokeWidth={1.5} />
+              Explore
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onAccuracyModeChange?.(accuracyMode === "educational" ? "cinematic" : "educational")
+              }
+              title={`Accuracy: ${ACCURACY_MODE_LABEL[accuracyMode]}`}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                accuracyMode === "educational"
+                  ? "bg-primary/15 text-primary"
+                  : "text-foreground/90 hover:text-primary"
+              }`}
+            >
+              <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.5} />
+              <span className="hidden sm:inline">{ACCURACY_MODE_LABEL[accuracyMode]}</span>
+            </button>
+            {accuracyMode === "cinematic" && (
               <button
-                onClick={() => setExploreOpen((v) => !v)}
-                title="Jump to a destination"
-                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground/90 transition-colors hover:text-primary"
+                type="button"
+                onClick={() => setTrueMoonsManual((v) => !v)}
+                title={trueMoonsManual ? "Moons: true periods" : "Moons: cinematic"}
+                className={`hidden rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors sm:inline-block ${
+                  trueMoonsManual ? "bg-beam/15 text-beam" : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <Compass className="h-4 w-4" strokeWidth={1.5} />
-                Explore
+                {trueMoonsManual ? "True moons" : "Cinematic moons"}
               </button>
-              {exploreOpen && (
-                <div className="absolute bottom-full right-0 z-50 mb-3 max-h-[min(50dvh,320px)] w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl glass p-2 text-left">
-                  {EXPLORE_GROUPS.map((g) => (
-                    <div key={g.label} className="mb-1 last:mb-0">
-                      <p className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/60">{g.label}</p>
-                      {g.items.map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => { onPick(n); setExploreOpen(false); }}
-                          className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-white/[0.06] hover:text-primary"
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
             {focusName && (
               <button
                 onClick={() => {
@@ -1922,7 +1992,7 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
         {/* Timeline scrubber — drag across your life; watch the light expand/retract */}
         {lightYears > 0 && (
           <div
-            className={`pointer-events-auto absolute left-1/2 w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl glass px-3 py-2.5 md:px-4 ${
+            className={`pointer-events-auto absolute left-1/2 z-20 w-[min(30rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl glass px-3 py-2.5 md:px-4 ${
               missionHudActive
                 ? "bottom-[calc(11.5rem+env(safe-area-inset-bottom,0px))] md:bottom-[4.75rem]"
                 : "bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:bottom-[4.75rem]"
@@ -1973,6 +2043,20 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
               <div>
                 <h3 className="font-display text-base font-semibold text-foreground">{detail.name}</h3>
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-primary/80">{detail.type}</p>
+                {detailBadges.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {detailBadges.map((b) => (
+                      <span
+                        key={b.label}
+                        title={b.title}
+                        className="inline-flex items-center gap-0.5 rounded-full bg-white/[0.05] px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                      >
+                        <Info className="h-2.5 w-2.5" strokeWidth={1.5} />
+                        {b.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <button onClick={() => setSelected(null)} className="text-muted-foreground transition-colors hover:text-foreground" title="Close">
                 <X className="h-4 w-4" strokeWidth={1.5} />
@@ -2044,9 +2128,63 @@ export const SolarSystem = forwardRef<SolarSystemHandle, SolarSystemProps>(
             )}
           </div>
         )}
-        <div className="pointer-events-none absolute right-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] hidden rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground sm:block md:right-4 md:top-4">
-          {showMinor ? "moons + dwarfs visible" : "zoom in for moons & dwarfs"}
+        <div className="pointer-events-none absolute right-3 top-[calc(7.5rem+env(safe-area-inset-top,0px))] hidden flex-col items-end gap-1.5 sm:flex md:right-4 md:top-4">
+          <span className="rounded-full glass px-3 py-1.5 text-[11px] text-muted-foreground">
+            {showMinor ? "moons + dwarfs visible" : "zoom in for moons & dwarfs"}
+          </span>
+          {hudBadges.map((b) => (
+            <span
+              key={b.label}
+              title={b.title}
+              className="max-w-[14rem] rounded-full glass px-2.5 py-1 text-[10px] text-muted-foreground/80"
+            >
+              {b.label}
+            </span>
+          ))}
         </div>
+
+        {exploreOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <>
+              <button
+                type="button"
+                aria-label="Close explore menu"
+                className="fixed inset-0 z-[100] bg-black/45"
+                onClick={() => setExploreOpen(false)}
+              />
+              <div
+                className={`fixed z-[101] overflow-y-auto rounded-2xl glass p-2 text-left shadow-2xl ${
+                  isMobile
+                    ? "inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] max-h-[min(50dvh,360px)]"
+                    : "bottom-24 right-4 w-64 max-h-[min(60dvh,400px)]"
+                }`}
+              >
+                <p className="px-2 py-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60">
+                  Explore destinations
+                </p>
+                {EXPLORE_GROUPS.map((g) => (
+                  <div key={g.label} className="mb-1 last:mb-0">
+                    <p className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/60">{g.label}</p>
+                    {g.items.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          onPick(n);
+                          setExploreOpen(false);
+                        }}
+                        className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-white/[0.06] hover:text-primary"
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>,
+            document.body,
+          )}
       </div>
     );
   }

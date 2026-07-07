@@ -102,13 +102,14 @@ export interface Spacecraft {
   desc: string;
   orbit: "earth" | "sun";
   altKm?: number; // Earth-orbiters: altitude above Earth
+  inclDeg?: number; // Earth-orbiters: orbital inclination
   distanceAU?: number; // heliocentric markers: current distance from the Sun
   dir?: [number, number, number]; // heliocentric markers: outbound direction
   color: string;
 }
 export const SPACECRAFT: Spacecraft[] = [
-  { name: "International Space Station", kind: "Space station", orbit: "earth", altKm: 417, color: "#e2e8f0", desc: "The largest crewed structure in space — a football-field-sized laboratory orbiting Earth every 90 minutes since 1998." },
-  { name: "Hubble Space Telescope", kind: "Space telescope", orbit: "earth", altKm: 535, color: "#c9d2dc", desc: "In low Earth orbit since 1990, Hubble has taken some of the most iconic images of the universe." },
+  { name: "International Space Station", kind: "Space station", orbit: "earth", altKm: 417, inclDeg: 51.64, color: "#e2e8f0", desc: "The largest crewed structure in space — a football-field-sized laboratory orbiting Earth every 90 minutes since 1998." },
+  { name: "Hubble Space Telescope", kind: "Space telescope", orbit: "earth", altKm: 535, inclDeg: 28.47, color: "#c9d2dc", desc: "In low Earth orbit since 1990, Hubble has taken some of the most iconic images of the universe." },
   { name: "James Webb Space Telescope", kind: "Space telescope", orbit: "sun", distanceAU: 1.01, dir: [-0.62, 0.12, 0.78], color: "#e8c169", desc: "The largest space telescope, parked at the Sun-Earth L2 point ~1.5 million km beyond Earth, seeing the universe in infrared." },
   { name: "Parker Solar Probe", kind: "Solar probe", orbit: "sun", distanceAU: 0.3, dir: [0.68, 0.16, -0.72], color: "#ffcf8f", desc: "The fastest object ever built, diving repeatedly through the Sun's corona to 'touch' our star." },
   { name: "New Horizons", kind: "Deep-space probe", orbit: "sun", distanceAU: 60, dir: [0.5, -0.55, 0.67], color: "#c7c0b0", desc: "Flew past Pluto in 2015 and a Kuiper Belt object in 2019; now heading into deep space." },

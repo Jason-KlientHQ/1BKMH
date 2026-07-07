@@ -20,6 +20,7 @@ import { computeMission } from "@/mission/preview";
 import { findNavStar } from "@/mission/stars";
 import { buildAppShareQuery, parseAppUrl } from "@/mission/url";
 import { DEFAULT_VESSEL, type MissionState } from "@/mission/types";
+import type { AccuracyMode } from "@/lib/accuracyMode";
 
 const VISUAL_TRIP_MS = 36_000;
 
@@ -40,6 +41,9 @@ const Index = () => {
     () => initialUrl?.mission ?? { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
   );
   const [flyInUrl, setFlyInUrl] = useState(() => initialUrl?.fly ?? false);
+  const [accuracyMode, setAccuracyMode] = useState<AccuracyMode>(
+    () => initialUrl?.accuracy ?? "cinematic",
+  );
   const { muted, toggle } = useAmbient();
   const systemRef = useRef<SolarSystemHandle>(null);
   const systemSectionRef = useRef<HTMLDivElement>(null);
@@ -57,6 +61,7 @@ const Index = () => {
           useLeap: leap ?? useLeap,
           mission,
           fly: fly ?? flyInUrl,
+          accuracy: accuracyMode,
         }),
       );
     } catch {
@@ -93,8 +98,9 @@ const Index = () => {
 
   // On load: restore birthday + mission from the URL.
   useEffect(() => {
-    const { bday: b, leap, mission: m } = parseAppUrl(new URLSearchParams(window.location.search));
+    const { bday: b, leap, mission: m, accuracy } = parseAppUrl(new URLSearchParams(window.location.search));
     setMission(m);
+    setAccuracyMode(accuracy);
     if (m.destination) setPlannerOpen(true);
     if (b) {
       setBday(b);
@@ -109,7 +115,7 @@ const Index = () => {
   useEffect(() => {
     if (!hasJourney.current && !mission.destination) return;
     syncUrl();
-  }, [mission, flyInUrl]);
+  }, [mission, flyInUrl, accuracyMode]);
 
   // Recompute stats when leap-year preference changes after a journey exists.
   useEffect(() => {
@@ -275,6 +281,8 @@ const Index = () => {
           syncUrl(undefined, undefined, fly);
         }}
         onPlannerOpen={() => setPlannerOpen(true)}
+        accuracyMode={accuracyMode}
+        onAccuracyModeChange={setAccuracyMode}
       />
 
       {/* ============================ RESULTS ============================ */}
@@ -330,6 +338,8 @@ const SolarSystemSection = ({
   autoFlyPending,
   onFlyUrlChange,
   onPlannerOpen,
+  accuracyMode,
+  onAccuracyModeChange,
 }: {
   sectionRef: React.RefObject<HTMLDivElement>;
   systemRef: React.RefObject<SolarSystemHandle>;
@@ -348,6 +358,8 @@ const SolarSystemSection = ({
   autoFlyPending: React.MutableRefObject<boolean>;
   onFlyUrlChange: (fly: boolean) => void;
   onPlannerOpen: () => void;
+  accuracyMode: AccuracyMode;
+  onAccuracyModeChange: (mode: AccuracyMode) => void;
 }) => {
   const [tripProgress, setTripProgress] = useState(0);
   const [missionFlying, setMissionFlying] = useState(false);
@@ -450,6 +462,8 @@ const SolarSystemSection = ({
             onMissionChange({ ...mission, destination: name });
             onPlannerOpen();
           }}
+          accuracyMode={accuracyMode}
+          onAccuracyModeChange={onAccuracyModeChange}
         />
       </ErrorBoundary>
 

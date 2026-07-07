@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computeMission, missionPreview } from "@/mission/preview";
 import { findNavStar, isNavStar, searchNavStars } from "@/mission/stars";
-import { buildAppShareQuery, parseMissionParams } from "@/mission/url";
+import { buildAppShareQuery, parseAppUrl, parseMissionParams } from "@/mission/url";
 import { DEFAULT_VESSEL } from "@/mission/types";
 
 describe("nav stars", () => {
@@ -34,6 +34,16 @@ describe("mission URL", () => {
     expect(q).toContain("dest=Proxima");
     expect(q).toContain("mode=light_speed");
     expect(q).toContain("mass=500");
+  });
+
+  it("round-trips educational accuracy mode in URL", () => {
+    const q = buildAppShareQuery({
+      bday: "1990-01-01",
+      mission: { origin: "sun", destination: null, mode: "sublight", vessel: { ...DEFAULT_VESSEL } },
+      accuracy: "educational",
+    });
+    const parsed = parseAppUrl(new URLSearchParams(q.slice(1)));
+    expect(parsed.accuracy).toBe("educational");
   });
 
   it("omits default params from share URL", () => {

@@ -1,4 +1,4 @@
-import { starScenePosition, type Vec3 } from "@/astrometry/positions";
+import { starScenePositionAtEpoch, type Vec3 } from "@/astrometry/properMotion";
 import { PLANETS } from "@/data/solarSystem";
 import { flybyArc, transferArc } from "@/mission/flyby";
 import type { NavStar } from "@/mission/stars";
@@ -20,6 +20,11 @@ function planetScenePos(name: string, years: number): Vec3 {
   const p = PLANETS.find((b) => b.name === name);
   if (!p) return [0, 0, 0];
   return toScenePosition(heliocentricAU(p, years));
+}
+
+/** Destination star position with proper motion at mission epoch. */
+function destScenePos(dest: NavStar, simYears: number, tripYears = 0): Vec3 {
+  return starScenePositionAtEpoch(dest.distanceLy, dest.unitDir, dest.name, simYears + tripYears);
 }
 
 function appendSamples(
@@ -54,7 +59,7 @@ function buildGravityAssistPath(
   const earth = planetScenePos("Earth", simYears);
   const jupiter = planetScenePos("Jupiter", simYears);
   const saturn = planetScenePos("Saturn", simYears);
-  const destPos = starScenePosition(dest.distanceLy, dest.unitDir);
+  const destPos = destScenePos(dest, simYears, result.etaYears);
 
   const start = origin === "earth" ? earth : sun;
   const points: MissionPathPoint[] = [{ position: start, label: "Origin", tEnd: 0 }];
@@ -109,7 +114,6 @@ export function buildMissionPath(
   }
 
   const originPos: Vec3 = [0, 0, 0];
-  const destPos = starScenePosition(dest.distanceLy, dest.unitDir);
   const total = Math.max(result.etaYears, 1e-9);
 
   const points: MissionPathPoint[] = [{ position: originPos, label: "Origin", tEnd: 0 }];
@@ -117,11 +121,13 @@ export function buildMissionPath(
 
   for (const leg of result.legs) {
     cum = Math.min(1, cum + (leg.durationYears ?? 0) / total);
-    points.push({ position: lerp3(originPos, destPos, cum), label: leg.label, tEnd: cum });
+    const legDest = destScenePos(dest, simYears, cum * total);
+    points.push({ position: lerp3(originPos, legDest, cum), label: leg.label, tEnd: cum });
   }
 
+  const finalDest = destScenePos(dest, simYears, total);
   if (points[points.length - 1].tEnd < 1) {
-    points.push({ position: destPos, label: dest.name, tEnd: 1 });
+    points.push({ position: finalDest, label: dest.name, tEnd: 1 });
   }
 
   return points;

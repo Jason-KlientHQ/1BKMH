@@ -7,6 +7,7 @@ import {
   type VesselConfig,
 } from "@/mission/types";
 import { parseBirthdayParam, parseLeapParam, buildShareQuery } from "@/lib/lightJourney";
+import { accuracyQueryValue, parseAccuracyParam, type AccuracyMode } from "@/lib/accuracyMode";
 
 const MODES: PropulsionMode[] = [
   "gravity_assist",
@@ -64,6 +65,7 @@ export interface AppUrlState {
   mission: MissionState;
   /** When true, shared links auto-start the cinematic flight on load. */
   fly?: boolean;
+  accuracy?: AccuracyMode;
 }
 
 export function parseFlyParam(value: string | null): boolean {
@@ -92,6 +94,8 @@ export function buildAppShareQuery(state: AppUrlState): string {
   if (v.thrustN !== DEFAULT_VESSEL.thrustN) parts.push(`thrust=${v.thrustN}`);
   if (v.sailAreaM2 !== DEFAULT_VESSEL.sailAreaM2) parts.push(`sail=${v.sailAreaM2}`);
   if (state.fly) parts.push("fly=1");
+  const acc = accuracyQueryValue(state.accuracy ?? "cinematic");
+  if (acc) parts.push(`accuracy=${acc}`);
 
   return parts.length ? `?${parts.join("&")}` : "";
 }
@@ -101,11 +105,13 @@ export function parseAppUrl(params: URLSearchParams): {
   leap: boolean;
   mission: MissionState;
   fly: boolean;
+  accuracy: AccuracyMode;
 } {
   return {
     bday: parseBirthdayParam(params.get("b")),
     leap: parseLeapParam(params.get("leap")),
     mission: parseMissionParams(params),
     fly: parseFlyParam(params.get("fly")),
+    accuracy: parseAccuracyParam(params.get("accuracy")),
   };
 }
