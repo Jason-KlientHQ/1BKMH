@@ -45,10 +45,10 @@ export function stellarRenderRadius(input: StellarRenderInput): number {
   return Math.min(MAX_RENDER, Math.max(MIN_RENDER, size));
 }
 
-/** Glow shell opacity (0–1) from luminosity. */
+/** Glow shell opacity (0–1) from luminosity — tuned low; scene applies mode scaling. */
 export function stellarGlowOpacity(luminositySolar: number, lumWeight = 1): number {
   const norm = Math.log10(Math.max(luminositySolar, 1e-3) + 1);
-  return Math.min(0.55, 0.06 + norm * 0.12 * lumWeight);
+  return Math.min(0.38, 0.04 + norm * 0.09 * lumWeight);
 }
 
 /** Camera framing distance for a focused star. */

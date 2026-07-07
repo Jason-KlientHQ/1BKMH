@@ -20,6 +20,17 @@ import {
   resolveTrueMoonPeriods,
   type AccuracyMode,
 } from "@/lib/accuracyMode";
+import {
+  decorativeOpacity,
+  LIGHT_REACHED_GLOW,
+  MISSION_DEST_GLOW,
+  showDecorativeGlow,
+  stateGlowOpacity,
+  starGlowShellRadiusFactor,
+  starLuminosityGlowOpacity,
+  SUN_CORONA_OPACITY,
+  SUN_CORONA_SCALE,
+} from "@/lib/glowStyle";
 import { bodyAccuracyBadges, globalAccuracyBadges } from "@/lib/accuracyBadges";
 import {
   EXO_CINEMATIC,
@@ -318,10 +329,12 @@ const Sun = ({ onFocus, accuracyMode }: { onFocus: (name: string) => void; accur
         onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
         onPointerOut={() => { document.body.style.cursor = "auto"; }}
       />
-      <mesh>
-        <sphereGeometry args={[r * 1.5, 32, 32]} />
-        <meshBasicMaterial color="#ff9b21" transparent opacity={0.18} />
-      </mesh>
+      {showDecorativeGlow(accuracyMode) && (
+        <mesh>
+          <sphereGeometry args={[r * SUN_CORONA_SCALE, 32, 32]} />
+          <meshBasicMaterial color="#ff9b21" transparent opacity={SUN_CORONA_OPACITY} depthWrite={false} />
+        </mesh>
+      )}
       <pointLight position={[0, 0, 0]} intensity={3.2} distance={0} decay={0} color="#fff2cc" />
       <Html position={[0, r + 1.5, 0]} center distanceFactor={60} className="ss-label">
         <button
@@ -397,11 +410,13 @@ const Planet = ({
   clock,
   showMinor,
   onFocus,
+  accuracyMode,
 }: {
   body: Body;
   clock: React.MutableRefObject<SimClock>;
   showMinor: boolean;
   onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
 }) => {
   const orbitRef = useRef<THREE.Group>(null);
   const spinRef = useRef<THREE.Group>(null);
@@ -497,17 +512,17 @@ const Planet = ({
                 />
               </mesh>
 
-              {body.name === "Earth" && (
+              {body.name === "Earth" && showDecorativeGlow(accuracyMode) && (
                 <mesh scale={[1.03, 1.03, 1.03]}>
                   <sphereGeometry args={[r, 24, 24]} />
-                  <meshBasicMaterial color="#6eb5ff" transparent opacity={0.14} depthWrite={false} />
+                  <meshBasicMaterial color="#6eb5ff" transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} />
                 </mesh>
               )}
 
-              {body.name === "Jupiter" && (
+              {body.name === "Jupiter" && showDecorativeGlow(accuracyMode) && (
                 <mesh scale={[1.001, 1.001, 1.001]}>
                   <sphereGeometry args={[r, 32, 32]} />
-                  <meshStandardMaterial color="#c49560" transparent opacity={0.18} roughness={1} depthWrite={false} />
+                  <meshStandardMaterial color="#c49560" transparent opacity={decorativeOpacity(0.18, accuracyMode)} roughness={1} depthWrite={false} />
                 </mesh>
               )}
             </group>
@@ -608,10 +623,12 @@ const CometBody = ({
   comet,
   clock,
   onFocus,
+  accuracyMode,
 }: {
   comet: Comet;
   clock: React.MutableRefObject<SimClock>;
   onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
 }) => {
   const nucleusRef = useRef<THREE.Group>(null);
   const tailRef = useRef<THREE.Group>(null);
@@ -645,23 +662,26 @@ const CometBody = ({
           <sphereGeometry args={[r, 24, 24]} />
           <meshBasicMaterial color={comet.color} />
         </mesh>
-        <mesh>
-          <sphereGeometry args={[r * 2.4, 20, 20]} />
-          <meshBasicMaterial color={comet.color} transparent opacity={0.22} depthWrite={false} />
-        </mesh>
+        {showDecorativeGlow(accuracyMode) && (
+          <mesh>
+            <sphereGeometry args={[r * 2.1, 20, 20]} />
+            <meshBasicMaterial color={comet.color} transparent opacity={decorativeOpacity(0.22, accuracyMode)} depthWrite={false} />
+          </mesh>
+        )}
         <Html position={[0, r * 3 + 0.8, 0]} center distanceFactor={45} className="ss-label">
           <button onClick={() => onFocus(comet.name)} className="ss-name" style={{ color: "#bfe6ff", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             {comet.name}
           </button>
         </Html>
       </group>
-      {/* dust/ion tail streaming away from the Sun */}
-      <group ref={tailRef}>
-        <mesh position={[0, 0, tailLen / 2]} rotation={[-Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[r * 1.8, tailLen, 14, 1, true]} />
-          <meshBasicMaterial color="#9fe4ff" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-        </mesh>
-      </group>
+      {showDecorativeGlow(accuracyMode) && (
+        <group ref={tailRef}>
+          <mesh position={[0, 0, tailLen / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+            <coneGeometry args={[r * 1.6, tailLen, 14, 1, true]} />
+            <meshBasicMaterial color="#9fe4ff" transparent opacity={decorativeOpacity(0.12, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 };
@@ -772,7 +792,15 @@ const RoadsterBody = ({
 };
 
 /* ------------------------------- a Black hole ----------------------------- */
-const BlackHoleBody = ({ bh, onFocus }: { bh: (typeof BLACK_HOLES)[number]; onFocus: (name: string) => void }) => {
+const BlackHoleBody = ({
+  bh,
+  onFocus,
+  accuracyMode,
+}: {
+  bh: (typeof BLACK_HOLES)[number];
+  onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
+}) => {
   const p = useMemo(
     () => new THREE.Vector3(...bh.dir).normalize().multiplyScalar(scaleDistanceAU(bh.distance * AU_PER_LY)),
     []
@@ -791,12 +819,21 @@ const BlackHoleBody = ({ bh, onFocus }: { bh: (typeof BLACK_HOLES)[number]; onFo
       </mesh>
       <mesh rotation={[Math.PI / 2.5, 0.5, 0]}>
         <ringGeometry args={[bhR * 1.25, accR, 80]} />
-        <meshBasicMaterial color="#ffb24a" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color="#ffb24a"
+          transparent
+          opacity={accuracyMode === "educational" ? 0.52 : decorativeOpacity(0.7, accuracyMode)}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[accR * 1.15, 20, 20]} />
-        <meshBasicMaterial color="#ff9b4a" transparent opacity={0.16} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
+      {showDecorativeGlow(accuracyMode) && (
+        <mesh>
+          <sphereGeometry args={[accR * 1.1, 20, 20]} />
+          <meshBasicMaterial color="#ff9b4a" transparent opacity={decorativeOpacity(0.16, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
       <Html position={[0, accR + 22, 0]} center distanceFactor={260} className="ss-label">
         <button onClick={() => onFocus(bh.name)} className="ss-name" style={{ color: "#ffbe8f", pointerEvents: "auto", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
           {bh.name}
@@ -814,6 +851,7 @@ const ExoPlanetBody = ({
   show,
   truePeriods,
   onFocus,
+  accuracyMode,
 }: {
   exo: Exoplanet;
   starSize: number;
@@ -821,6 +859,7 @@ const ExoPlanetBody = ({
   show: boolean;
   truePeriods: boolean;
   onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
 }) => {
   const ref = useRef<THREE.Group>(null);
   const localR = starSize * 1.35 + 3 + 5 * Math.log10(1 + exo.aAU / 0.02);
@@ -853,15 +892,15 @@ const ExoPlanetBody = ({
           <meshStandardMaterial
             color={exo.color}
             emissive={isHabitable ? "#3a6a4a" : exo.color}
-            emissiveIntensity={isHabitable ? 0.35 : 0.2}
+            emissiveIntensity={isHabitable ? 0.28 : 0.14}
             roughness={exo.radiusEarth > 6 ? 0.7 : 0.88}
             metalness={exo.radiusEarth > 6 ? 0.08 : 0.02}
           />
         </mesh>
-        {isHabitable && (
+        {isHabitable && showDecorativeGlow(accuracyMode) && (
           <mesh scale={[1.06, 1.06, 1.06]}>
             <sphereGeometry args={[r, 20, 20]} />
-            <meshBasicMaterial color="#7ec8e8" transparent opacity={0.12} depthWrite={false} />
+            <meshBasicMaterial color="#7ec8e8" transparent opacity={decorativeOpacity(0.12, accuracyMode)} depthWrite={false} />
           </mesh>
         )}
         <Html position={[0, r + 0.9, 0]} center distanceFactor={26} className="ss-label">
@@ -1000,17 +1039,19 @@ const ExoticBody = ({
         <sphereGeometry args={[core, 28, 28]} />
         <meshBasicMaterial color={obj.color} toneMapped={false} />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[core * 2.4, 20, 20]} />
-        <meshBasicMaterial color={obj.color} transparent opacity={0.22} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
+      {showDecorativeGlow(accuracyMode) && (
+        <mesh>
+          <sphereGeometry args={[core * 2.2, 20, 20]} />
+          <meshBasicMaterial color={obj.color} transparent opacity={decorativeOpacity(0.22, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
 
       {obj.kind === "pulsar" && (
         <group ref={beamRef} rotation={[0.5, 0, 0.3]}>
           {[1, -1].map((s) => (
             <mesh key={s} position={[0, s * core * 5, 0]} rotation={[s > 0 ? 0 : Math.PI, 0, 0]}>
               <coneGeometry args={[core * 1.6, core * 9, 20, 1, true]} />
-              <meshBasicMaterial color="#cfe6ff" transparent opacity={0.16} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+              <meshBasicMaterial color="#cfe6ff" transparent opacity={decorativeOpacity(0.16, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
             </mesh>
           ))}
         </group>
@@ -1021,12 +1062,12 @@ const ExoticBody = ({
           {[1, -1].map((s) => (
             <mesh key={s} position={[0, s * core * 7, 0]} rotation={[s > 0 ? 0 : Math.PI, 0, 0]}>
               <coneGeometry args={[core * 1.3, core * 14, 22, 1, true]} />
-              <meshBasicMaterial color="#9fd0ff" transparent opacity={0.15} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+              <meshBasicMaterial color="#9fd0ff" transparent opacity={decorativeOpacity(0.15, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
             </mesh>
           ))}
           <mesh ref={diskRef} rotation={[Math.PI / 2.4, 0, 0]}>
             <ringGeometry args={[core * 1.4, core * 3.6, 56]} />
-            <meshBasicMaterial color="#ffce8f" transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+            <meshBasicMaterial color="#ffce8f" transparent opacity={decorativeOpacity(0.4, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
           </mesh>
         </group>
       )}
@@ -1035,7 +1076,7 @@ const ExoticBody = ({
         [0, 1, 2].map((i) => (
           <mesh key={i} rotation={[Math.PI / 2, 0, (i * Math.PI) / 3]}>
             <torusGeometry args={[core * 2.3, core * 0.12, 8, 44]} />
-            <meshBasicMaterial color="#ff9bf0" transparent opacity={0.28} depthWrite={false} blending={THREE.AdditiveBlending} />
+            <meshBasicMaterial color="#ff9bf0" transparent opacity={decorativeOpacity(0.28, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
           </mesh>
         ))}
 
@@ -1203,6 +1244,8 @@ const NearbyStars = ({
       {placed.map(({ star, size, glow }, i) => {
         const reached = star.distance <= lightYears;
         const isDest = destinationName === star.name;
+        const shellFactor = starGlowShellRadiusFactor(accuracyMode);
+        const shellOpacity = starLuminosityGlowOpacity(glow, accuracyMode);
         return (
           <group key={star.name} ref={(el) => { groupRefs.current[i] = el; }}>
             {/* animated plasma photosphere (unlit — stars emit their own light) */}
@@ -1215,22 +1258,22 @@ const NearbyStars = ({
               onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
               onPointerOut={() => { document.body.style.cursor = "auto"; }}
             />
-            {/* soft glow, brighter for luminous stars */}
-            <mesh>
-              <sphereGeometry args={[size * 1.7, 20, 20]} />
-              <meshBasicMaterial color={star.color} transparent opacity={glow} depthWrite={false} />
-            </mesh>
-            {/* reached → gold-tinted outer glow, keeping the star's true colour */}
+            {shellFactor > 0 && shellOpacity > 0 && (
+              <mesh>
+                <sphereGeometry args={[size * shellFactor, 20, 20]} />
+                <meshBasicMaterial color={star.color} transparent opacity={shellOpacity} depthWrite={false} />
+              </mesh>
+            )}
             {reached && (
               <mesh>
-                <sphereGeometry args={[size * 2.3, 20, 20]} />
-                <meshBasicMaterial color="#ffd166" transparent opacity={0.16} depthWrite={false} />
+                <sphereGeometry args={[size * LIGHT_REACHED_GLOW.scale, 20, 20]} />
+                <meshBasicMaterial color="#ffd166" transparent opacity={stateGlowOpacity(LIGHT_REACHED_GLOW.opacity, accuracyMode)} depthWrite={false} />
               </mesh>
             )}
             {isDest && (
               <mesh>
-                <sphereGeometry args={[size * 2.8, 24, 24]} />
-                <meshBasicMaterial color="#2fe0c0" transparent opacity={0.22} depthWrite={false} />
+                <sphereGeometry args={[size * MISSION_DEST_GLOW.scale, 24, 24]} />
+                <meshBasicMaterial color="#2fe0c0" transparent opacity={stateGlowOpacity(MISSION_DEST_GLOW.opacity, accuracyMode)} depthWrite={false} />
               </mesh>
             )}
             {/* leader line from the star up to its name tag */}
@@ -1261,6 +1304,7 @@ const NearbyStars = ({
                 show={showMinor || focusName === star.name}
                 truePeriods={trueMoonPeriods}
                 onFocus={onFocus}
+                accuracyMode={accuracyMode}
               />
             ))}
           </group>
@@ -1543,9 +1587,11 @@ const LocalBubble = () => {
 const CosmicLandmarkBody = ({
   landmark,
   onFocus,
+  accuracyMode,
 }: {
   landmark: CosmicLandmark;
   onFocus: (name: string) => void;
+  accuracyMode: AccuracyMode;
 }) => {
   const p = useMemo(
     () => new THREE.Vector3(...landmark.dir).normalize().multiplyScalar(scaleDistanceAU(landmark.sceneDistanceLy * AU_PER_LY)),
@@ -1562,20 +1608,22 @@ const CosmicLandmarkBody = ({
         <sphereGeometry args={[core, 32, 32]} />
         <meshBasicMaterial color={landmark.color} toneMapped={false} />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[core * 2.6, 24, 24]} />
-        <meshBasicMaterial color={landmark.color} transparent opacity={0.14} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      {landmark.kind === "galaxy" && (
-        <mesh rotation={[Math.PI / 2.8, 0.4, 0.15]}>
-          <ringGeometry args={[core * 1.6, core * 5.5, 64]} />
-          <meshBasicMaterial color={landmark.color} transparent opacity={0.22} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+      {showDecorativeGlow(accuracyMode) && (
+        <mesh>
+          <sphereGeometry args={[core * 2.3, 24, 24]} />
+          <meshBasicMaterial color={landmark.color} transparent opacity={decorativeOpacity(0.14, accuracyMode)} depthWrite={false} blending={THREE.AdditiveBlending} />
         </mesh>
       )}
-      {landmark.kind === "galactic_center" && (
+      {landmark.kind === "galaxy" && showDecorativeGlow(accuracyMode) && (
+        <mesh rotation={[Math.PI / 2.8, 0.4, 0.15]}>
+          <ringGeometry args={[core * 1.6, core * 5.5, 64]} />
+          <meshBasicMaterial color={landmark.color} transparent opacity={decorativeOpacity(0.22, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      )}
+      {landmark.kind === "galactic_center" && showDecorativeGlow(accuracyMode) && (
         <mesh rotation={[Math.PI / 2.2, 0, 0.5]}>
           <ringGeometry args={[core * 1.2, core * 4.2, 56]} />
-          <meshBasicMaterial color="#ffae5a" transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+          <meshBasicMaterial color="#ffae5a" transparent opacity={decorativeOpacity(0.35, accuracyMode)} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
         </mesh>
       )}
       <Html position={[0, core * 3.5, 0]} center distanceFactor={360} className="ss-label">
@@ -1666,7 +1714,7 @@ const Scene = ({
     <Sun onFocus={onFocus} accuracyMode={accuracyMode} />
 
     {PLANETS.map((p) => (
-      <Planet key={p.name} body={p} clock={clock} showMinor={showMinor} onFocus={onFocus} />
+      <Planet key={p.name} body={p} clock={clock} showMinor={showMinor} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
 
     {MOONS.map((m) => {
@@ -1685,7 +1733,7 @@ const Scene = ({
     })}
 
     {COMETS.map((c) => (
-      <CometBody key={c.name} comet={c} clock={clock} onFocus={onFocus} />
+      <CometBody key={c.name} comet={c} clock={clock} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
     <RoadsterBody clock={clock} onFocus={onFocus} />
     {SPACECRAFT.filter((s) => s.orbit === "sun").map((s) => (
@@ -1696,7 +1744,7 @@ const Scene = ({
       <ExoticBody key={o.name} obj={o} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
     {COSMIC_LANDMARKS.map((l) => (
-      <CosmicLandmarkBody key={l.name} landmark={l} onFocus={onFocus} />
+      <CosmicLandmarkBody key={l.name} landmark={l} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
 
     <Belt {...ASTEROID_BELT} color="#8c8170" size={0.18} meanPeriodYears={4.6} clock={clock} />
@@ -1747,7 +1795,7 @@ const Scene = ({
     />
 
     {BLACK_HOLES.map((bh) => (
-      <BlackHoleBody key={bh.name} bh={bh} onFocus={onFocus} />
+      <BlackHoleBody key={bh.name} bh={bh} onFocus={onFocus} accuracyMode={accuracyMode} />
     ))}
     <LightSphere lightYears={displayLY} animating={animatingLight} onDone={() => setAnimatingLight(false)} />
 
