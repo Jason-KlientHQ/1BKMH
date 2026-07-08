@@ -28,20 +28,11 @@ export default defineConfig(() => ({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
+          // Only split the React-free three.js tree. Splitting @react-three, scene,
+          // or mission UI into separate chunks duplicated React in production and
+          // crashed the app on load (__SECRET_INTERNALS undefined).
           if (/[\\/]node_modules[\\/](three|three-mesh-bvh|three-stdlib)[\\/]/.test(id)) {
             return "three";
-          }
-          if (/[\\/]node_modules[\\/](@react-three)[\\/]/.test(id)) {
-            return "r3f";
-          }
-          if (id.includes("/src/components/SolarSystem") || id.includes("/src/components/MissionFlight")) {
-            return "scene";
-          }
-          if (id.includes("/src/components/MissionPlanner") || id.includes("/src/components/RouteHUD")) {
-            return "mission-ui";
-          }
-          if (id.includes("/src/components/TechnicalReadme")) {
-            return "readme";
           }
         },
       },

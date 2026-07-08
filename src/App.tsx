@@ -1,7 +1,9 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Landing from "./pages/Landing.tsx";
-import Explore from "./pages/Explore.tsx";
 import NotFound from "./pages/NotFound.tsx";
+
+const Explore = lazy(() => import("./pages/Explore.tsx"));
 
 function hasAppDeepLink(search: string): boolean {
   const params = new URLSearchParams(search);
@@ -25,13 +27,21 @@ function RootRoute() {
   return <Landing />;
 }
 
+const PageLoader = () => (
+  <div className="flex min-h-[100dvh] items-center justify-center bg-[#04050c] text-sm text-muted-foreground">
+    Loading…
+  </div>
+);
+
 const App = () => (
   <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<RootRoute />} />
-      <Route path="/explore" element={<Explore />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/explore" element={<Explore />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   </BrowserRouter>
 );
 

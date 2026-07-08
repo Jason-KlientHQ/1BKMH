@@ -28,19 +28,13 @@ const Landing = () => {
 
       <div className="relative z-10 mx-auto max-w-3xl px-5 py-[max(2rem,env(safe-area-inset-top))] pb-24">
         <header className="mb-14 text-center">
-          <h1
-            className="animate-float-up font-display text-[clamp(2.5rem,8vw,5rem)] font-bold leading-[0.95] tracking-[-0.03em] text-balance"
-            style={{ opacity: 0 }}
-          >
+          <h1 className="animate-float-up font-display text-[clamp(2.5rem,8vw,5rem)] font-bold leading-[0.95] tracking-[-0.03em] text-balance">
             How far has your
             <br />
             <span className="text-gradient">light traveled?</span>
           </h1>
 
-          <p
-            className="animate-float-up mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg [animation-delay:0.1s]"
-            style={{ opacity: 0 }}
-          >
+          <p className="animate-float-up mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg [animation-delay:0.1s]">
             Light moves one light-year per year. If a beam left the moment you were born and never
             stopped, it would already be deep among the stars. This app turns that distance into
             something you can fly through — a growing sphere of light, real orbits, and a map of the
@@ -50,7 +44,6 @@ const Landing = () => {
           <Link
             to="/explore"
             className="animate-float-up group mt-10 inline-flex h-12 items-center justify-center gap-3 rounded-xl bg-primary py-3 pl-6 pr-3 font-semibold text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.6)] transition-all duration-500 ease-fluid hover:shadow-[0_10px_40px_-6px_hsl(var(--primary)/0.75)] active:scale-[0.98] [animation-delay:0.18s]"
-            style={{ opacity: 0 }}
           >
             Explore
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-foreground/15 transition-transform duration-500 ease-fluid group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
@@ -59,7 +52,7 @@ const Landing = () => {
           </Link>
         </header>
 
-        <section className="animate-float-up glass-shell [animation-delay:0.24s]" style={{ opacity: 0 }}>
+        <section className="animate-float-up glass-shell [animation-delay:0.24s]">
           <div className="glass-core space-y-8 p-6 sm:p-9">
             <div>
               <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">

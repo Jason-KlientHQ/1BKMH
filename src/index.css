@@ -226,7 +226,13 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .reveal { opacity: 1; transform: none; filter: none; transition: none; }
+    .reveal,
+    .animate-float-up {
+      opacity: 1;
+      transform: none;
+      filter: none;
+      animation: none;
+    }
     html { scroll-behavior: auto; }
   }
 }
